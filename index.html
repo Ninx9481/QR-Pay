@@ -93,6 +93,19 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
 .cta:disabled{opacity:.38;box-shadow:none;cursor:default}
 .cta:disabled:active{transform:none;background:var(--accent)}
 .cta svg{width:22px;height:22px}
+.actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.9fr);gap:10px}
+.cta.cash{background:var(--surface);color:var(--fg);border:1px solid var(--line);box-shadow:none;font-size:17px}
+.cta.cash svg{color:var(--accent)}
+.cta.cash:active{background:var(--surface-2)}
+.cta.cash:disabled:active{background:var(--surface)}
+.split{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--surface-2);font-size:14px;color:var(--muted)}
+.chip b{color:var(--fg);font-weight:600}
+.tag{font-size:11px;font-weight:700;letter-spacing:.04em;padding:3px 7px;border-radius:6px;flex:none}
+.tag.qr{background:var(--accent-soft);color:var(--accent)}
+.tag.cash{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+.all-split{font-size:13px;color:var(--muted)}
+.all-split b{color:var(--fg);font-weight:600}
 
 /* ---------- sheets ---------- */
 .scrim{position:fixed;inset:0;background:var(--scrim);opacity:0;transition:opacity .28s ease;z-index:20;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -230,6 +243,7 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
     <symbol id="i-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></symbol>
     <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></symbol>
+    <symbol id="i-cash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
     <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
@@ -260,7 +274,10 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
     <button class="payee" id="payee" type="button"></button>
   </section>
 
-  <button class="cta" id="genBtn" disabled><svg><use href="#i-qr"/></svg>สร้าง QR Code</button>
+  <div class="actions">
+    <button class="cta cash" id="cashBtn" disabled><svg><use href="#i-cash"/></svg>เงินสด</button>
+    <button class="cta" id="genBtn" disabled><svg><use href="#i-qr"/></svg>สร้าง QR Code</button>
+  </div>
 </main>
 
 <div class="scrim" id="scrim" hidden></div>
@@ -297,8 +314,13 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
       <div class="stat"><div class="stat-k" id="statTotalK">ยอดรวม</div><div class="stat-v accent num" id="statTotal">฿0.00</div></div>
       <div class="stat"><div class="stat-k">รายการสำเร็จ</div><div class="stat-v num" id="statCount">0<small>รายการ</small></div></div>
     </div>
+    <div class="split num" id="splitRow">
+      <span class="chip">QR <b id="splitQr">฿0.00</b></span>
+      <span class="chip">เงินสด <b id="splitCash">฿0.00</b></span>
+    </div>
     <div class="all" id="allCard" hidden>
       <div class="all-top"><span class="all-k">ทุกเครื่อง (Google Sheet)</span><span class="all-v num" id="allTotal"></span></div>
+      <div class="all-split num" id="allSplit"></div>
       <ul class="all-list num" id="allList"></ul>
       <div class="all-msg" id="allMsg" hidden></div>
       <a class="ext" id="sheetLink" href="#" target="_blank" rel="noopener" hidden>เปิด Google Sheet ↗</a>
@@ -505,6 +527,7 @@ function onAmountInput(){
   if (amountEl.value !== shown){ amountEl.value = shown; try{ amountEl.setSelectionRange(shown.length, shown.length); }catch(e){} }
   currentSatang = toSatang(p);
   genBtn.disabled = currentSatang <= 0;
+  $("cashBtn").disabled = currentSatang <= 0;
   fitAmount(shown || "0");
 }
 amountEl.addEventListener("input", onAmountInput);
@@ -603,17 +626,25 @@ function cancelQr(){ pending = null; closeSheet("qrSheet"); amountEl.focus({prev
 $("qrCancel").addEventListener("click", cancelQr);
 $("qrConfirm").addEventListener("click", function(){
   if (!pending) return;
-  var tx = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), t: Date.now(), a: pending.a, s: sellerName()};
-  txs.push(tx); save(K.tx, txs);
-  queueOp({type:"add", id:tx.id, t:tx.t, a:tx.a, seller:tx.s});
+  var a = pending.a;
   pending = null;
-  try{ navigator.vibrate && navigator.vibrate(12); }catch(e){}
   closeSheet("qrSheet");
+  recordSale(a, "qr");
+});
+$("cashBtn").addEventListener("click", function(){
+  if (currentSatang <= 0) return;
+  recordSale(currentSatang, "cash");
+});
+function recordSale(amount, method){
+  var tx = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), t: Date.now(), a: amount, s: sellerName(), m: method};
+  txs.push(tx); save(K.tx, txs);
+  queueOp({type:"add", id:tx.id, t:tx.t, a:tx.a, seller:tx.s, m:method});
+  try{ navigator.vibrate && navigator.vibrate(12); }catch(e){}
   resetAmount(); renderHeader();
   amountEl.focus({preventScroll:true});
-  showToast("บันทึก ฿" + money(tx.a) + " แล้ว", function(){ removeTx(tx.id); });
+  showToast("บันทึก" + (method === "cash" ? "เงินสด" : "") + " ฿" + money(tx.a) + " แล้ว", function(){ removeTx(tx.id); });
   flush();
-});
+}
 function requestWake(){ try{ if (navigator.wakeLock) navigator.wakeLock.request("screen").then(function(l){ wakeLock = l; }).catch(function(){}); }catch(e){} }
 function releaseWake(){ try{ if (wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){} }
 
@@ -646,11 +677,16 @@ function renderSummary(){
   $("statTotal").textContent = "฿" + money(sum);
   $("statCount").innerHTML = list.length + "<small>รายการ</small>";
   $("avgLabel").textContent = list.length ? "เฉลี่ย ฿" + money(Math.round(sum / list.length)) : "";
+  var cashSum = list.reduce(function(a, t){ return a + (t.m === "cash" ? t.a : 0); }, 0);
+  $("splitQr").textContent = "฿" + money(sum - cashSum);
+  $("splitCash").textContent = "฿" + money(cashSum);
 
   var ul = $("txList"); ul.innerHTML = "";
   list.forEach(function(t){
     var li = document.createElement("li"); li.className = "tx";
-    li.innerHTML = '<span class="tx-time num">' + timeStr(t.t) + '</span><span class="tx-amt num">฿' + money(t.a) +
+    var cash = t.m === "cash";
+    li.innerHTML = '<span class="tx-time num">' + timeStr(t.t) + '</span><span class="tag ' + (cash ? "cash" : "qr") + '">' +
+                   (cash ? "เงินสด" : "QR") + '</span><span class="tx-amt num">฿' + money(t.a) +
                    '</span><button class="tx-del" aria-label="ลบรายการนี้"><svg><use href="#i-x"/></svg></button>';
     var del = li.querySelector(".tx-del"), armTimer;
     del.addEventListener("click", function(){
@@ -680,7 +716,7 @@ function loadAllSummary(day){
   var my = ++allReq, url = load(K.sheet, "");
   var sheetUrl = load(K.sheetUrl, "");
   $("sheetLink").hidden = !sheetUrl; if (sheetUrl) $("sheetLink").href = sheetUrl;
-  $("allTotal").textContent = ""; $("allList").innerHTML = "";
+  $("allTotal").textContent = ""; $("allList").innerHTML = ""; $("allSplit").hidden = true;
   showAllMsg(pendingCount() ? "กำลังส่งรายการที่ค้าง แล้วจะโหลดยอดรวม…" : "กำลังโหลดยอดรวมทุกเครื่อง…");
   var run = function(){
     api("GET", url, {action:"summary", date:day}).then(function(r){
@@ -688,6 +724,9 @@ function loadAllSummary(day){
       if (!r || !r.ok) throw new Error(r && r.error || "bad");
       if (r.sheetUrl){ save(K.sheetUrl, r.sheetUrl); $("sheetLink").href = r.sheetUrl; $("sheetLink").hidden = false; }
       $("allTotal").innerHTML = "฿" + money(r.total) + "<small>" + r.count + " รายการ</small>";
+      var hasSplit = typeof r.cash === "number";
+      $("allSplit").innerHTML = hasSplit ? "QR <b>฿" + money(r.total - r.cash) + "</b> · เงินสด <b>฿" + money(r.cash) + "</b>" : "";
+      $("allSplit").hidden = !hasSplit || !r.count;
       $("allList").innerHTML = r.sellers.map(function(s){
         return "<li><span>" + esc(s.name) + "</span><span>฿" + money(s.total) + "<small>" + s.count + "</small></span></li>";
       }).join("");
@@ -897,7 +936,7 @@ if (mql){ (mql.addEventListener ? mql.addEventListener("change", applyTheme) : m
 function makeIcon(size){
   try{
     var c = document.createElement("canvas"); c.width = c.height = size;
-    var g = c.getContext("2d"), s = size / 24;
+    var g = c.getContext("2d");
     g.fillStyle = "#059669"; g.fillRect(0, 0, size, size);
     g.fillStyle = "#ffffff"; g.font = "600 " + Math.round(size * .5) + "px -apple-system,Segoe UI,Roboto,sans-serif";
     g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("฿", size / 2, size * .53);
