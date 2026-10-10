@@ -818,7 +818,7 @@ function sheetHint(state, extra){
     bad: "ต้องเป็นลิงก์ที่ขึ้นต้นด้วย https://script.google.com/… หรือรหัสที่ขึ้นต้นด้วย QRPAY1:",
     testing: "กำลังทดสอบ…",
     good: "เชื่อมต่อสำเร็จ" + (extra ? " · " + extra : ""),
-    fail: "เชื่อมต่อไม่ได้ ตรวจว่า Deploy เป็น Web app และตั้ง Who has access เป็น Anyone แล้ว"
+    fail: "เชื่อมต่อไม่ได้" + (extra ? " · " + extra : " ตรวจว่า Deploy เป็น Web app และตั้ง Who has access เป็น Anyone แล้ว")
   }[state] || "";
   if (state === "fail") h.className = "hint bad";
   $("copyCode").disabled = !load(K.sheet, "");
@@ -847,7 +847,7 @@ $("sheetTest").addEventListener("click", function(){
     if (!r || !r.ok || r.app !== "qr-pay") throw new Error("bad");
     if (r.sheetUrl) save(K.sheetUrl, r.sheetUrl);
     sheetHint("good", r.name || ""); renderSync(); flush();
-  }).catch(function(){ sheetHint("fail"); });
+  }).catch(function(e){ sheetHint("fail", e && e.reason); });
 });
 $("copyCode").addEventListener("click", function(){
   if (!load(K.sheet, "")) return;
@@ -870,15 +870,37 @@ function removeTx(id){
   else if (load(K.sheet, "")) queueOp({type:"void", id:id});
   renderHeader(); renderSync(); flush();
 }
-function api(method, url, data){
+function xhr(method, url, body){
+  return new Promise(function(res, rej){
+    var x = new XMLHttpRequest(), bad = function(m){ var e = new Error(m); e.reason = m; rej(e); };
+    x.open(method, url, true); x.timeout = 20000;
+    x.onload = function(){
+      var j; try{ j = JSON.parse(x.responseText); }catch(e){ return bad("ได้หน้าที่ไม่ใช่ข้อมูลจากสคริปต์ (อาจเป็นหน้าล็อกอิน Google) สถานะ " + x.status); }
+      res(j);
+    };
+    x.onerror = function(){ bad("เครือข่ายของเครื่องนี้ต่อ Google ไม่ได้ ลองสลับ Wi-Fi/เน็ตมือถือ หรือปิดตัวบล็อกโฆษณา"); };
+    x.ontimeout = function(){ bad("หมดเวลา เครือข่ายช้าเกินไป"); };
+    x.send(body || null);
+  });
+}
+function request(method, url, body){
+  if (!window.fetch) return xhr(method, url, body);
   var ctrl = window.AbortController ? new AbortController() : null;
   var timer = setTimeout(function(){ ctrl && ctrl.abort(); }, 20000);
   var opts = {method:method, redirect:"follow", signal: ctrl ? ctrl.signal : undefined};
+  if (body) opts.body = body;
+  return fetch(url, opts).then(function(r){ clearTimeout(timer); return r.text(); }, function(e){ clearTimeout(timer); return xhr(method, url, body); })
+    .then(function(t){
+      try{ return JSON.parse(t); }catch(e){ var er = new Error("html"); er.reason = "ได้หน้าที่ไม่ใช่ข้อมูลจากสคริปต์ (อาจเป็นหน้าล็อกอิน Google) ตรวจว่าตั้งเป็น Anyone และใช้ลิงก์ /exec"; throw er; }
+    });
+}
+function api(method, url, data){
   if (method === "GET"){
     var q = Object.keys(data).map(function(k){ return encodeURIComponent(k) + "=" + encodeURIComponent(data[k]); }).join("&");
     if (q) url += (url.indexOf("?") === -1 ? "?" : "&") + q;
-  } else opts.body = JSON.stringify(data);   // text/plain: no CORS preflight for Apps Script
-  return fetch(url, opts).then(function(r){ clearTimeout(timer); return r.json(); }, function(e){ clearTimeout(timer); throw e; });
+    return request("GET", url);
+  }
+  return request(method, url, JSON.stringify(data));   // text/plain: no CORS preflight for Apps Script
 }
 function flush(){
   var url = load(K.sheet, "");

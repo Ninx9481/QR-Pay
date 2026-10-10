@@ -369,13 +369,34 @@ function windowInfo(){
 /* ================= data: Google Sheet (or sample data until linked) ================= */
 function isScriptUrl(s){ return /^https:\/\/script\.google(usercontent)?\.com\/.+/.test(s); }
 function sheetUrl(){ var s = load(K.sheet, ""); return isScriptUrl(s) ? s : ""; }
-function api(url, params){
+function xhr(method, url, body){
+  return new Promise(function(res, rej){
+    var x = new XMLHttpRequest(), bad = function(m){ var e = new Error(m); e.reason = m; rej(e); };
+    x.open(method, url, true); x.timeout = 20000;
+    x.onload = function(){
+      var j; try{ j = JSON.parse(x.responseText); }catch(e){ return bad("ได้หน้าที่ไม่ใช่ข้อมูลจากสคริปต์ (อาจเป็นหน้าล็อกอิน Google) สถานะ " + x.status); }
+      res(j);
+    };
+    x.onerror = function(){ bad("เครือข่ายของเครื่องนี้ต่อ Google ไม่ได้ ลองสลับ Wi-Fi/เน็ตมือถือ หรือปิดตัวบล็อกโฆษณา"); };
+    x.ontimeout = function(){ bad("หมดเวลา เครือข่ายช้าเกินไป"); };
+    x.send(body || null);
+  });
+}
+function request(method, url, body){
+  if (!window.fetch) return xhr(method, url, body);
   var ctrl = window.AbortController ? new AbortController() : null;
   var timer = setTimeout(function(){ ctrl && ctrl.abort(); }, 20000);
+  var opts = {method:method, redirect:"follow", signal: ctrl ? ctrl.signal : undefined};
+  if (body) opts.body = body;
+  return fetch(url, opts).then(function(r){ clearTimeout(timer); return r.text(); }, function(e){ clearTimeout(timer); return xhr(method, url, body); })
+    .then(function(t){
+      try{ return JSON.parse(t); }catch(e){ var er = new Error("html"); er.reason = "ได้หน้าที่ไม่ใช่ข้อมูลจากสคริปต์ (อาจเป็นหน้าล็อกอิน Google) ตรวจว่าตั้งเป็น Anyone และใช้ลิงก์ /exec"; throw er; }
+    });
+}
+function api(url, params){
   var q = Object.keys(params).map(function(k){ return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&");
   if (q) url += (url.indexOf("?") === -1 ? "?" : "&") + q;
-  return fetch(url, {method:"GET", redirect:"follow", signal: ctrl ? ctrl.signal : undefined})
-    .then(function(r){ clearTimeout(timer); return r.json(); }, function(e){ clearTimeout(timer); throw e; });
+  return request("GET", url);
 }
 function getRange(from, to){
   var url = sheetUrl();
@@ -712,7 +733,7 @@ function readCode(s){ var i = s.indexOf(CODE_PREFIX); if (i < 0) return null; tr
 var HINTS = {
   idle: "วางลิงก์ Web app (ขึ้นต้น https://script.google.com/…) หรือรหัสตั้งค่าที่ได้จากแอปขายของ",
   ok: "บันทึกลิงก์แล้ว กดทดสอบเพื่อตรวจว่าใช้ได้", bad: "ต้องเป็นลิงก์ที่ขึ้นต้นด้วย https://script.google.com/… หรือรหัสที่ขึ้นต้นด้วย QRPAY1:",
-  testing: "กำลังทดสอบ…", fail: "เชื่อมต่อไม่ได้ ตรวจว่า Deploy เป็น Web app และตั้ง Who has access เป็น Anyone",
+  testing: "กำลังทดสอบ…", fail: "เชื่อมต่อไม่ได้",
   old: "เชื่อมต่อได้ แต่สคริปต์ยังเป็นเวอร์ชันเก่า ต้องวาง Code.gs ตัวใหม่แล้ว Deploy เป็น New version", good: "เชื่อมต่อสำเร็จ"
 };
 function hint(state, extra){
@@ -734,7 +755,7 @@ $("sheetTest").addEventListener("click", function(){
     if (!r || !r.ok || r.app !== "qr-pay") throw new Error("bad");
     if (r.sheetUrl) save(K.sheetUrl, r.sheetUrl);
     if ((r.version || 0) < 3) hint("old"); else hint("good", r.name || "");
-  }).catch(function(){ hint("fail"); });
+  }).catch(function(e){ hint("fail", e && e.reason); });
 });
 $("sheetClear").addEventListener("click", function(){ save(K.sheet, ""); save(K.sheetUrl, ""); save(K.cache, {}); $("sheetIn").value = ""; hint("idle"); });
 var isOpen = false;
