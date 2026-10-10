@@ -20,7 +20,7 @@
 :root{
   --bg:#f6f8f7; --surface:#ffffff; --surface-2:#eef2f0; --fg:#0f1714; --muted:#66736d; --line:rgba(15,40,30,.09);
   --accent:#059669; --accent-press:#047857; --accent-soft:rgba(5,150,105,.10); --on-accent:#ffffff;
-  --danger:#dc2626; --danger-soft:rgba(220,38,38,.10); --scrim:rgba(10,20,16,.32);
+  --danger:#dc2626; --danger-soft:rgba(220,38,38,.10); --scrim:rgba(10,20,16,.32); --warn:#d97706;
   --shadow:0 1px 2px rgba(15,40,30,.05),0 12px 32px -12px rgba(15,40,30,.18);
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Sukhumvit Set","Noto Sans Thai","Leelawadee UI",Roboto,"Helvetica Neue",sans-serif;
   --font-num:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
@@ -30,14 +30,14 @@
   :root:not([data-app="light"]):not([data-theme="light"]){
     --bg:#0c0e0f; --surface:#16191b; --surface-2:#1e2224; --fg:#eef2f0; --muted:#8c9692; --line:rgba(255,255,255,.07);
     --accent:#34d399; --accent-press:#10b981; --accent-soft:rgba(52,211,153,.12); --on-accent:#03261a;
-    --danger:#f87171; --danger-soft:rgba(248,113,113,.12); --scrim:rgba(0,0,0,.55);
+    --danger:#f87171; --danger-soft:rgba(248,113,113,.12); --scrim:rgba(0,0,0,.55); --warn:#fbbf24;
     --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 18px 40px -16px rgba(0,0,0,.7); color-scheme:dark;
   }
 }
 :root[data-app="dark"],:root[data-theme="dark"]:not([data-app="light"]){
   --bg:#0c0e0f; --surface:#16191b; --surface-2:#1e2224; --fg:#eef2f0; --muted:#8c9692; --line:rgba(255,255,255,.07);
   --accent:#34d399; --accent-press:#10b981; --accent-soft:rgba(52,211,153,.12); --on-accent:#03261a;
-  --danger:#f87171; --danger-soft:rgba(248,113,113,.12); --scrim:rgba(0,0,0,.55);
+  --danger:#f87171; --danger-soft:rgba(248,113,113,.12); --scrim:rgba(0,0,0,.55); --warn:#fbbf24;
   --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 18px 40px -16px rgba(0,0,0,.7); color-scheme:dark;
 }
 :root[data-app="light"]{color-scheme:light}
@@ -192,6 +192,32 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
 .toast .ok{width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;flex:none}
 .toast .ok svg{width:14px;height:14px}
 
+/* sync */
+.sync{display:inline-flex;align-items:center;gap:5px;margin-left:6px;font-size:12px;font-weight:600;color:var(--muted)}
+.sync::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.sync.ok{color:var(--accent)}
+.sync.wait{color:var(--warn)}
+.sync.busy::before{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+.all{border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;display:flex;flex-direction:column;gap:10px;background:var(--accent-soft)}
+.all-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.all-k{font-size:13px;color:var(--muted)}
+.all-v{font-size:24px;font-weight:650;letter-spacing:-.02em;color:var(--accent)}
+.all-v small{font-size:13px;color:var(--muted);font-weight:500;margin-left:6px}
+.all-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.all-list li{display:flex;justify-content:space-between;gap:12px;font-size:15px}
+.all-list li span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.all-list li span:last-child{font-weight:600}
+.all-list li small{color:var(--muted);font-weight:500;margin-left:6px}
+.all-msg{font-size:14px;color:var(--muted)}
+.ext{color:var(--accent);font-weight:600;font-size:14px;text-decoration:none;align-self:flex-start}
+.ext:hover{text-decoration:underline}
+.text-in.sm{font-family:var(--font);font-size:16px;font-weight:500;letter-spacing:0}
+.mini-row{display:flex;gap:8px;flex-wrap:wrap}
+.mini{height:40px;padding:0 14px;border-radius:12px;background:var(--surface-2);font-size:14px;font-weight:600;color:var(--fg)}
+.mini:disabled{opacity:.4;cursor:default}
+.mini.accent{color:var(--accent)}
+
 @media (max-height:560px){ .stage{gap:8px} .cta{height:56px} }
 @media (prefers-reduced-motion:reduce){ *{transition-duration:.01ms!important;animation-duration:.01ms!important} }
 </style>
@@ -215,7 +241,7 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
 <main class="app" id="app">
   <header class="top">
     <button class="today" id="todayBtn" aria-label="ดูสรุปรายได้วันนี้">
-      <span class="today-label">วันนี้</span>
+      <span class="today-label">วันนี้<span class="sync" id="syncChip" hidden></span></span>
       <span class="today-amt num"><span class="cur">฿</span><span id="todayTotal">0.00</span><span class="today-count" id="todayCount"></span></span>
     </button>
     <div class="icons">
@@ -271,7 +297,13 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
       <div class="stat"><div class="stat-k" id="statTotalK">ยอดรวม</div><div class="stat-v accent num" id="statTotal">฿0.00</div></div>
       <div class="stat"><div class="stat-k">รายการสำเร็จ</div><div class="stat-v num" id="statCount">0<small>รายการ</small></div></div>
     </div>
-    <div class="list-head"><span>ประวัติรายการ</span><span id="avgLabel" class="num"></span></div>
+    <div class="all" id="allCard" hidden>
+      <div class="all-top"><span class="all-k">ทุกเครื่อง (Google Sheet)</span><span class="all-v num" id="allTotal"></span></div>
+      <ul class="all-list num" id="allList"></ul>
+      <div class="all-msg" id="allMsg" hidden></div>
+      <a class="ext" id="sheetLink" href="#" target="_blank" rel="noopener" hidden>เปิด Google Sheet ↗</a>
+    </div>
+    <div class="list-head"><span id="listHeadK">ประวัติรายการ</span><span id="avgLabel" class="num"></span></div>
     <ul class="tx-list" id="txList"></ul>
     <div class="empty" id="txEmpty" hidden>ยังไม่มีรายการรับเงินในวันนี้</div>
     <button class="link-danger" id="clearBtn"><svg><use href="#i-trash"/></svg>ล้างประวัติทั้งหมด</button>
@@ -287,9 +319,23 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
   </div>
   <div class="sheet-body">
     <div class="group">
+      <label class="group-k" for="seller">ชื่อคนขาย / ชื่อเครื่องนี้</label>
+      <input class="text-in sm" id="seller" type="text" autocomplete="off" maxlength="30" placeholder="เช่น แอน, หน้าร้าน">
+    </div>
+    <div class="group">
       <label class="group-k" for="ppId">เบอร์พร้อมเพย์ที่รับเงิน</label>
       <input class="text-in" id="ppId" type="text" inputmode="numeric" autocomplete="off" placeholder="08x-xxx-xxxx" maxlength="22">
       <div class="hint" id="ppHint">เบอร์มือถือ 10 หลัก หรือเลขบัตรประชาชน / เลขผู้เสียภาษี 13 หลัก</div>
+    </div>
+    <div class="group">
+      <label class="group-k" for="sheetIn">รวมยอดทุกเครื่องใน Google Sheet</label>
+      <input class="text-in sm" id="sheetIn" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false"
+        placeholder="วางลิงก์ Web app หรือรหัสตั้งค่า">
+      <div class="hint" id="sheetHint">ไม่บังคับ ถ้าไม่ใส่ ยอดจะเก็บไว้ในเครื่องนี้อย่างเดียว</div>
+      <div class="mini-row">
+        <button class="mini" id="sheetTest" type="button">ทดสอบการเชื่อมต่อ</button>
+        <button class="mini accent" id="copyCode" type="button">คัดลอกรหัสตั้งค่าให้เครื่องอื่น</button>
+      </div>
     </div>
     <div class="group">
       <div class="group-k" id="themeK">ธีม</div>
@@ -300,7 +346,7 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
         <button data-theme-opt="system" aria-pressed="false">ตามระบบ</button>
       </div>
     </div>
-    <p class="note">ข้อมูลทั้งหมดเก็บไว้ในเครื่องนี้เท่านั้น ไม่มีการส่งออกไปที่ใด</p>
+    <p class="note" id="privNote"></p>
     <button class="btn btn-primary" id="setDone">เสร็จสิ้น</button>
   </div>
 </section>
@@ -324,7 +370,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 (function(){
 "use strict";
 /* ================= storage ================= */
-var K = {id:"pp.id", theme:"pp.theme", tx:"pp.tx"};
+var K = {id:"pp.id", theme:"pp.theme", tx:"pp.tx", seller:"pp.seller", sheet:"pp.sheet", sheetUrl:"pp.sheetUrl", outbox:"pp.outbox"};
 function load(k, d){ try{ var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }catch(e){ return d; } }
 function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 
@@ -557,16 +603,16 @@ function cancelQr(){ pending = null; closeSheet("qrSheet"); amountEl.focus({prev
 $("qrCancel").addEventListener("click", cancelQr);
 $("qrConfirm").addEventListener("click", function(){
   if (!pending) return;
-  var tx = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), a: pending.a};
+  var tx = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), t: Date.now(), a: pending.a, s: sellerName()};
   txs.push(tx); save(K.tx, txs);
+  queueOp({type:"add", id:tx.id, t:tx.t, a:tx.a, seller:tx.s});
   pending = null;
   try{ navigator.vibrate && navigator.vibrate(12); }catch(e){}
   closeSheet("qrSheet");
   resetAmount(); renderHeader();
   amountEl.focus({preventScroll:true});
-  showToast("บันทึก ฿" + money(tx.a) + " แล้ว", function(){
-    txs = txs.filter(function(x){ return x.id !== tx.id; }); save(K.tx, txs); renderHeader();
-  });
+  showToast("บันทึก ฿" + money(tx.a) + " แล้ว", function(){ removeTx(tx.id); });
+  flush();
 });
 function requestWake(){ try{ if (navigator.wakeLock) navigator.wakeLock.request("screen").then(function(l){ wakeLock = l; }).catch(function(){}); }catch(e){} }
 function releaseWake(){ try{ if (wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){} }
@@ -614,15 +660,47 @@ function renderSummary(){
         return;
       }
       clearTimeout(armTimer);
-      txs = txs.filter(function(x){ return x.id !== t.id; }); save(K.tx, txs);
-      renderSummary(); renderHeader();
+      removeTx(t.id);
+      renderSummary();
     });
     ul.appendChild(li);
   });
   ul.hidden = !list.length;
   $("txEmpty").hidden = !!list.length;
   $("clearBtn").disabled = !txs.length;
+
+  var linked = !!load(K.sheet, "");
+  $("statTotalK").textContent = (viewDay === today ? "ยอดรวมวันนี้" : "ยอดรวม") + (linked ? " · เครื่องนี้" : "");
+  $("listHeadK").textContent = linked ? "ประวัติรายการ · เครื่องนี้" : "ประวัติรายการ";
+  $("allCard").hidden = !linked;
+  if (linked) loadAllSummary(viewDay);
 }
+var allReq = 0;
+function loadAllSummary(day){
+  var my = ++allReq, url = load(K.sheet, "");
+  var sheetUrl = load(K.sheetUrl, "");
+  $("sheetLink").hidden = !sheetUrl; if (sheetUrl) $("sheetLink").href = sheetUrl;
+  $("allTotal").textContent = ""; $("allList").innerHTML = "";
+  showAllMsg(pendingCount() ? "กำลังส่งรายการที่ค้าง แล้วจะโหลดยอดรวม…" : "กำลังโหลดยอดรวมทุกเครื่อง…");
+  var run = function(){
+    api("GET", url, {action:"summary", date:day}).then(function(r){
+      if (my !== allReq) return;
+      if (!r || !r.ok) throw new Error(r && r.error || "bad");
+      if (r.sheetUrl){ save(K.sheetUrl, r.sheetUrl); $("sheetLink").href = r.sheetUrl; $("sheetLink").hidden = false; }
+      $("allTotal").innerHTML = "฿" + money(r.total) + "<small>" + r.count + " รายการ</small>";
+      $("allList").innerHTML = r.sellers.map(function(s){
+        return "<li><span>" + esc(s.name) + "</span><span>฿" + money(s.total) + "<small>" + s.count + "</small></span></li>";
+      }).join("");
+      showAllMsg(r.count ? "" : "ยังไม่มีรายการของวันนี้ใน Sheet");
+    }).catch(function(){
+      if (my !== allReq) return;
+      showAllMsg(navigator.onLine === false ? "ออฟไลน์อยู่ จะแสดงยอดรวมเมื่อต่อเน็ตได้" : "โหลดยอดรวมไม่สำเร็จ ลองเปิดหน้านี้ใหม่อีกครั้ง");
+    });
+  };
+  flush().then(run, run);
+}
+function showAllMsg(t){ $("allMsg").textContent = t; $("allMsg").hidden = !t; }
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
 $("dayPrev").addEventListener("click", function(){ viewDay = shiftDay(viewDay, -1); renderSummary(); });
 $("dayNext").addEventListener("click", function(){ viewDay = shiftDay(viewDay, 1); renderSummary(); });
 
@@ -631,7 +709,12 @@ function openDialog(){ var s = $("scrim2"), d = $("confirmDlg"); s.hidden = fals
   requestAnimationFrame(function(){ requestAnimationFrame(function(){ s.classList.add("show"); d.classList.add("show"); $("cfNo").focus(); }); }); }
 function closeDialog(){ var s = $("scrim2"), d = $("confirmDlg"); s.classList.remove("show"); d.classList.remove("show");
   setTimeout(function(){ s.hidden = true; d.hidden = true; }, 260); }
-$("clearBtn").addEventListener("click", openDialog);
+$("clearBtn").addEventListener("click", function(){
+  $("cfText").textContent = load(K.sheet, "")
+    ? "รายการในเครื่องนี้จะถูกลบและกู้คืนไม่ได้ ข้อมูลใน Google Sheet ยังอยู่ครบ"
+    : "รายการรับเงินทุกวันจะถูกลบออกจากเครื่องนี้ และกู้คืนไม่ได้";
+  openDialog();
+});
 $("cfNo").addEventListener("click", closeDialog);
 $("scrim2").addEventListener("click", closeDialog);
 $("cfYes").addEventListener("click", function(){
@@ -639,7 +722,12 @@ $("cfYes").addEventListener("click", function(){
 });
 
 /* ================= settings ================= */
-function fillSettings(){ var id = parseId(load(K.id, "")); $("ppId").value = id ? fmtId(id) : load(K.id, ""); validateId(false); syncSeg(); }
+function fillSettings(){
+  var id = parseId(load(K.id, "")); $("ppId").value = id ? fmtId(id) : load(K.id, ""); validateId(false); syncSeg();
+  $("seller").value = load(K.seller, "");
+  $("sheetIn").value = load(K.sheet, "");
+  sheetHint(load(K.sheet, "") ? "ok" : "idle");
+}
 function validateId(strict){
   var el = $("ppId"), hint = $("ppHint"), raw = el.value, d = raw.replace(/\D/g, ""), id = parseId(raw);
   el.classList.remove("bad"); hint.className = "hint";
@@ -656,13 +744,131 @@ $("ppId").addEventListener("blur", function(){ var id = parseId(this.value); if 
 function commitSettings(){
   var raw = $("ppId").value, d = raw.replace(/\D/g, ""), id = parseId(raw);
   if (id) save(K.id, id.digits); else if (!d) save(K.id, "");
-  renderPayee();
+  save(K.seller, $("seller").value.trim().slice(0, 30));
+  var s = $("sheetIn").value.trim();
+  if (!s){ if (load(K.sheet, "")){ save(K.sheet, ""); save(K.sheetUrl, ""); } }
+  else if (isScriptUrl(s) && s !== load(K.sheet, "")){ save(K.sheet, s); save(K.sheetUrl, ""); }
+  renderPayee(); renderSync(); flush();
 }
 $("setDone").addEventListener("click", function(){
   var raw = $("ppId").value;
   if (raw.replace(/\D/g, "") && !parseId(raw)){ validateId(true); $("ppId").focus(); return; }
+  var s = $("sheetIn").value.trim();
+  if (s && !isScriptUrl(s)){ sheetHint("bad"); $("sheetIn").focus(); return; }
   closeTop(true);
 });
+
+/* --- Google Sheet link + setup code --- */
+var CODE_PREFIX = "QRPAY1:";
+function isScriptUrl(s){ return /^https:\/\/script\.google(usercontent)?\.com\/.+/.test(s); }
+function b64e(str){ return btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function b64d(str){ str = str.replace(/-/g, "+").replace(/_/g, "/"); while (str.length % 4) str += "="; return decodeURIComponent(escape(atob(str))); }
+function makeCode(){ return CODE_PREFIX + b64e(JSON.stringify({u: load(K.sheet, ""), p: load(K.id, "")})); }
+function readCode(s){
+  var i = s.indexOf(CODE_PREFIX); if (i === -1) return null;
+  try{ var o = JSON.parse(b64d(s.slice(i + CODE_PREFIX.length).trim())); return isScriptUrl(o.u) ? o : null; }catch(e){ return null; }
+}
+function sheetHint(state, extra){
+  var h = $("sheetHint"), el = $("sheetIn");
+  el.classList.toggle("bad", state === "bad");
+  h.className = "hint" + (state === "ok" || state === "good" ? " ok" : state === "bad" ? " bad" : "");
+  h.textContent = {
+    idle: "ไม่บังคับ ถ้าไม่ใส่ ยอดจะเก็บไว้ในเครื่องนี้อย่างเดียว",
+    ok: "เชื่อมแล้ว ยอดที่กดยืนยันจะถูกส่งเข้า Sheet อัตโนมัติ",
+    code: "ใส่การตั้งค่าจากรหัสแล้ว (ลิงก์ Sheet และเบอร์พร้อมเพย์) อย่าลืมใส่ชื่อคนขาย",
+    bad: "ต้องเป็นลิงก์ที่ขึ้นต้นด้วย https://script.google.com/… หรือรหัสที่ขึ้นต้นด้วย QRPAY1:",
+    testing: "กำลังทดสอบ…",
+    good: "เชื่อมต่อสำเร็จ" + (extra ? " · " + extra : ""),
+    fail: "เชื่อมต่อไม่ได้ ตรวจว่า Deploy เป็น Web app และตั้ง Who has access เป็น Anyone แล้ว"
+  }[state] || "";
+  if (state === "fail") h.className = "hint bad";
+  $("copyCode").disabled = !load(K.sheet, "");
+  $("privNote").textContent = load(K.sheet, "")
+    ? "รายการที่กดยืนยันจะถูกส่งไปที่ Google Sheet ของคุณเท่านั้น และเก็บสำเนาไว้ในเครื่องนี้"
+    : "ข้อมูลทั้งหมดเก็บไว้ในเครื่องนี้เท่านั้น ไม่มีการส่งออกไปที่ใด";
+}
+$("sheetIn").addEventListener("input", function(){
+  var s = this.value.trim(), code = readCode(s);
+  if (code){
+    this.value = code.u; save(K.sheet, code.u); save(K.sheetUrl, "");
+    if (parseId(code.p)){ save(K.id, parseId(code.p).digits); $("ppId").value = fmtId(parseId(code.p)); validateId(false); renderPayee(); }
+    sheetHint("code"); renderSync(); flush();
+    if (!$("seller").value.trim()) setTimeout(function(){ $("seller").focus(); }, 50);
+    return;
+  }
+  if (!s) sheetHint("idle");
+  else if (isScriptUrl(s)){ save(K.sheet, s); save(K.sheetUrl, ""); sheetHint("ok"); renderSync(); }
+  else sheetHint(s.length > 12 ? "bad" : "idle");
+});
+$("sheetTest").addEventListener("click", function(){
+  var s = $("sheetIn").value.trim();
+  if (!isScriptUrl(s)){ sheetHint("bad"); return; }
+  save(K.sheet, s); sheetHint("testing");
+  api("GET", s, {}).then(function(r){
+    if (!r || !r.ok || r.app !== "qr-pay") throw new Error("bad");
+    if (r.sheetUrl) save(K.sheetUrl, r.sheetUrl);
+    sheetHint("good", r.name || ""); renderSync(); flush();
+  }).catch(function(){ sheetHint("fail"); });
+});
+$("copyCode").addEventListener("click", function(){
+  if (!load(K.sheet, "")) return;
+  var code = makeCode(), btn = this;
+  var done = function(){ btn.textContent = "คัดลอกแล้ว ส่งให้เครื่องอื่นทาง LINE ได้เลย"; setTimeout(function(){ btn.textContent = "คัดลอกรหัสตั้งค่าให้เครื่องอื่น"; }, 2500); };
+  var fallback = function(){ var el = $("sheetIn"); el.value = code; el.focus(); el.select(); sheetHint("idle"); $("sheetHint").textContent = "คัดลอกข้อความในช่องด้านบนไปส่งให้เครื่องอื่น"; };
+  try{ navigator.clipboard.writeText(code).then(done, fallback); }catch(e){ fallback(); }
+});
+
+/* ================= sync to Google Sheet ================= */
+var outbox = load(K.outbox, []); if (!Array.isArray(outbox)) outbox = [];
+var syncing = null, lastSyncFailed = false;
+function sellerName(){ return load(K.seller, "") || "ไม่ระบุ"; }
+function pendingCount(){ return outbox.length; }
+function queueOp(op){ outbox.push(op); save(K.outbox, outbox); renderSync(); }
+function removeTx(id){
+  txs = txs.filter(function(x){ return x.id !== id; }); save(K.tx, txs);
+  var unsent = outbox.some(function(o){ return o.type === "add" && o.id === id; });
+  if (unsent) { outbox = outbox.filter(function(o){ return o.id !== id; }); save(K.outbox, outbox); }
+  else if (load(K.sheet, "")) queueOp({type:"void", id:id});
+  renderHeader(); renderSync(); flush();
+}
+function api(method, url, data){
+  var ctrl = window.AbortController ? new AbortController() : null;
+  var timer = setTimeout(function(){ ctrl && ctrl.abort(); }, 20000);
+  var opts = {method:method, redirect:"follow", signal: ctrl ? ctrl.signal : undefined};
+  if (method === "GET"){
+    var q = Object.keys(data).map(function(k){ return encodeURIComponent(k) + "=" + encodeURIComponent(data[k]); }).join("&");
+    if (q) url += (url.indexOf("?") === -1 ? "?" : "&") + q;
+  } else opts.body = JSON.stringify(data);   // text/plain: no CORS preflight for Apps Script
+  return fetch(url, opts).then(function(r){ clearTimeout(timer); return r.json(); }, function(e){ clearTimeout(timer); throw e; });
+}
+function flush(){
+  var url = load(K.sheet, "");
+  if (!url || !outbox.length) { renderSync(); return Promise.resolve(); }
+  if (syncing) return syncing;
+  var batch = outbox.slice(0, 200);
+  renderSync(true);
+  syncing = api("POST", url, {v:1, device:sellerName(), ops:batch}).then(function(r){
+    if (!r || !r.ok || !Array.isArray(r.done)) throw new Error(r && r.error || "bad");
+    var done = {}; r.done.forEach(function(k){ done[k] = 1; });
+    outbox = outbox.filter(function(o){ return !done[o.type + ":" + o.id]; });
+    save(K.outbox, outbox); lastSyncFailed = false;
+  }).catch(function(){ lastSyncFailed = true; })
+    .then(function(){
+      syncing = null; renderSync();
+      if (!lastSyncFailed && outbox.length) return flush();   // more than one batch
+    });
+  return syncing;
+}
+function renderSync(busy){
+  var chip = $("syncChip"), linked = !!load(K.sheet, "");
+  chip.hidden = !linked;
+  if (!linked) return;
+  var n = outbox.length;
+  chip.className = "sync " + (n ? "wait" : "ok") + (busy ? " busy" : "");
+  chip.textContent = busy ? "กำลังส่ง" : n ? "รอส่ง " + n : "ซิงก์แล้ว";
+}
+window.addEventListener("online", function(){ flush(); });
+setInterval(function(){ if (outbox.length) flush(); }, 30000);
 
 /* ================= theme ================= */
 var mql = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
@@ -710,12 +916,12 @@ function makeIcon(size){
 })();
 
 /* keep "today" fresh if the app stays open past midnight */
-document.addEventListener("visibilitychange", function(){ if (!document.hidden) renderHeader(); });
+document.addEventListener("visibilitychange", function(){ if (!document.hidden){ renderHeader(); flush(); } });
 setInterval(renderHeader, 60000);
 window.addEventListener("resize", function(){ fitAmount(amountEl.value || "0"); });
 
 /* ================= boot ================= */
-applyTheme(); renderHeader(); renderPayee(); onAmountInput();
+applyTheme(); renderHeader(); renderPayee(); onAmountInput(); renderSync(); flush();
 setTimeout(function(){ try{ amountEl.focus({preventScroll:true}); }catch(e){} }, 60);
 })();
 </script>
