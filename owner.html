@@ -315,6 +315,13 @@ tfoot td{font-weight:700;border-bottom:0}
       <div class="hint">ใช้กับมุมมอง "สัปดาห์" และลำดับวันในกราฟวันไหนขายดี</div>
     </div>
     <div class="group">
+      <div class="group-k">หมวดซื้อของ</div>
+      <div id="catList"></div>
+      <input class="text-in" id="catIn" type="text" maxlength="20" placeholder="ชื่อหมวดใหม่" aria-label="ชื่อหมวดใหม่">
+      <div class="hint" id="catHint">เอาหมวดออกจากตัวเลือกได้ รายการที่เคยบันทึกไว้ยังอยู่ครบ</div>
+      <div class="mini-row"><button class="mini" id="catAdd" type="button">เพิ่มหมวด</button><button class="mini" id="catReset" type="button">คืนค่าเริ่มต้น</button></div>
+    </div>
+    <div class="group">
       <div class="group-k">รหัสร้าน (ส่งให้พนักงานเพื่อเข้าร่วม)</div>
       <div class="code-box" id="codeBox">······</div>
       <div class="mini-row">
@@ -1349,7 +1356,7 @@ $("csvBtn").addEventListener("click", function(){
 var isOpen = false;
 function openSheet(){
   if (isOpen) return; isOpen = true;
-  syncTheme(); syncWk(); renderAccount(); loadCode(); loadMembers(); mHint(""); $("csvHint").textContent = "";
+  syncTheme(); syncWk(); renderAccount(); renderCatSettings(); loadCats(renderCatSettings); $("catHint").textContent = "เอาหมวดออกจากตัวเลือกได้ รายการที่เคยบันทึกไว้ยังอยู่ครบ"; loadCode(); loadMembers(); mHint(""); $("csvHint").textContent = "";
   if (!$("mDate").value) $("mDate").value = ymd(now());
   $("scrim").hidden = false; $("setSheet").hidden = false;
   requestAnimationFrame(function(){ requestAnimationFrame(function(){ $("scrim").classList.add("show"); $("setSheet").classList.add("show"); }); });
@@ -1366,12 +1373,53 @@ document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeS
 
 /* ================= expense sheet ================= */
 var DEF_CATS = ["วัตถุดิบ", "บรรจุภัณฑ์", "อุปกรณ์", "อื่นๆ"];
+var catsStored = null;
 var expOpen = false, expChanged = false, eReq = 0, eData = [], eEdit = null, eCat = DEF_CATS[0], eNew = false, fData = [];
 var eMonth = mk(TODAY.getFullYear(), TODAY.getMonth(), 1);
 function eHint(t, ok){ var e = $("eHint"); e.textContent = t; e.className = "hint" + (ok ? " ok" : t ? " bad" : ""); }
 function fHint(t, ok){ var e = $("fHint"); e.textContent = t; e.className = "hint" + (ok ? " ok" : t ? " bad" : ""); }
 function newId(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
-function catList(){ var a = DEF_CATS.slice(); eData.forEach(function(x){ if (x.cat && a.indexOf(x.cat) < 0) a.push(x.cat); }); return a; }
+function catsNow(){ return (catsStored && catsStored.length ? catsStored : DEF_CATS).slice(); }
+function catList(){ var a = catsNow(); if (eEdit && eEdit.cat && a.indexOf(eEdit.cat) < 0) a.push(eEdit.cat); return a; }
+function loadCats(cb){
+  FB.withTimeout(FB.db.doc(FB.path("settings/cats")).get(), 15000).then(function(s){
+    var v = s.exists ? s.data() : null; catsStored = v && Array.isArray(v.list) && v.list.length ? v.list.map(String) : DEF_CATS.slice();
+    if (cb) cb();
+  }, function(){ if (cb) cb(); });
+}
+function saveCats(list){
+  return FB.withTimeout(FB.db.doc(FB.path("settings/cats")).set({list: list}), 15000).then(function(){ catsStored = list.slice(); expChanged = true; });
+}
+function renderCatSettings(){
+  var box = $("catList"); if (!box) return; box.textContent = "";
+  var list = catsNow();
+  list.forEach(function(c){
+    var row = h("div", "mem"), nm = h("div", "nm", c); row.appendChild(nm);
+    if (list.length > 1){
+      var b = h("button", "mini danger", "เอาออก"); b.type = "button";
+      b.addEventListener("click", function(){
+        if (!b.dataset.arm){ b.dataset.arm = "1"; b.textContent = "ยืนยัน"; setTimeout(function(){ delete b.dataset.arm; b.textContent = "เอาออก"; }, 2500); return; }
+        b.disabled = true;
+        saveCats(list.filter(function(x){ return x !== c; })).then(renderCatSettings, function(e){ b.disabled = false; b.textContent = FB.errMsg(e); });
+      });
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+  });
+}
+function catMsg(t, ok){ var e = $("catHint"); e.textContent = t; e.className = "hint" + (ok ? " ok" : t ? " bad" : ""); }
+$("catAdd").addEventListener("click", function(){
+  var nm = $("catIn").value.trim().slice(0, 20), list = catsNow(), btn = this;
+  if (!nm){ catMsg("ใส่ชื่อหมวด"); return; }
+  if (list.indexOf(nm) >= 0){ catMsg("มีหมวดนี้อยู่แล้ว"); return; }
+  if (list.length >= 30){ catMsg("เพิ่มได้สูงสุด 30 หมวด"); return; }
+  btn.disabled = true; catMsg("กำลังบันทึก…", true);
+  saveCats(list.concat([nm])).then(function(){ $("catIn").value = ""; catMsg("เพิ่มหมวด " + nm + " แล้ว", true); renderCatSettings(); }, function(e){ catMsg(FB.errMsg(e)); }).then(function(){ btn.disabled = false; });
+});
+$("catReset").addEventListener("click", function(){
+  var btn = this; btn.disabled = true;
+  saveCats(DEF_CATS.slice()).then(function(){ catMsg("คืนค่าเริ่มต้นแล้ว", true); renderCatSettings(); }, function(e){ catMsg(FB.errMsg(e)); }).then(function(){ btn.disabled = false; });
+});
 function renderCats(){
   var box = $("eCats"); box.textContent = "";
   catList().forEach(function(c){
@@ -1422,7 +1470,7 @@ function renderEList(){
       var ed = h("button", "mini", "แก้"); ed.type = "button";
       ed.addEventListener("click", function(){
         eEdit = x; $("eDate").value = x.day; $("eName").value = x.name; $("eAmt").value = (x.a / 100).toFixed(2);
-        eNew = false; eCat = x.cat || DEF_CATS[3]; $("eCatNew").hidden = true; renderCats();
+        eNew = false; eCat = x.cat || catsNow()[0]; $("eCatNew").hidden = true; renderCats();
         $("eCancel").hidden = false; $("eSave").textContent = "บันทึกการแก้ไข"; $("eFormK").textContent = "แก้ไขรายการ"; eHint("");
         $("eFormK").scrollIntoView({block: "start"});
       });
@@ -1442,11 +1490,12 @@ $("eSave").addEventListener("click", function(){
   if (!nm){ eHint("ใส่ชื่อรายการที่ซื้อ"); return; }
   if (!isFinite(amt) || amt <= 0){ eHint("ใส่จำนวนเงินเป็นตัวเลขมากกว่า 0"); return; }
   if (!cat){ eHint("ใส่ชื่อหมวดใหม่ หรือเลือกหมวดที่มีอยู่"); return; }
-  var data = {t: mk(+p[0], +p[1] - 1, +p[2]).getTime(), day: ds, a: amt, name: nm.slice(0, 60), cat: cat.slice(0, 20)};
+  var data = {t: mk(+p[0], +p[1] - 1, +p[2]).getTime(), day: ds, a: amt, name: nm.slice(0, 60), cat: cat.slice(0, 20)}, wasNew = eNew;
   var ref = FB.db.doc(FB.path("exp/" + (eEdit ? eEdit.id : newId("e"))));
   btn.disabled = true; eHint("กำลังบันทึก…", true);
   FB.withTimeout(eEdit ? ref.update(data) : ref.set(data), 15000).then(function(){
     expChanged = true; eHint((eEdit ? "แก้ไขแล้ว " : "บันทึกแล้ว ") + nm + " " + baht(amt), true);
+    if (wasNew && catsNow().indexOf(data.cat) < 0) saveCats(catsNow().concat([data.cat])).then(renderCats, function(){});
     eNew = false; eCat = data.cat; $("eCatNew").hidden = true; $("eCatNew").value = ""; resetEForm();
     eMonth = mk(+p[0], +p[1] - 1, 1); loadExp();
   }, function(e){ eHint(FB.errMsg(e)); }).then(function(){ btn.disabled = false; });
@@ -1517,9 +1566,9 @@ function showTab(t){
 document.querySelectorAll("[data-etab]").forEach(function(b){ b.addEventListener("click", function(){ showTab(b.dataset.etab); }); });
 function openExp(){
   if (expOpen) return; expOpen = true; expChanged = false;
-  eMonth = mk(TODAY.getFullYear(), TODAY.getMonth(), 1); eNew = false; eCat = DEF_CATS[0]; eData = [];
+  eMonth = mk(TODAY.getFullYear(), TODAY.getMonth(), 1); eNew = false; eCat = catsNow()[0]; eData = [];
   resetEForm(); eHint(""); fHint(""); $("eDate").value = ymd(now()); $("eCatNew").hidden = true; $("eCatNew").value = "";
-  monthOpts($("fFrom")); showTab("buy"); renderCats(); loadExp(); loadFixed();
+  monthOpts($("fFrom")); showTab("buy"); renderCats(); loadExp(); loadFixed(); loadCats(function(){ if (catsNow().indexOf(eCat) < 0 && !eEdit) eCat = catsNow()[0]; renderCats(); });
   $("scrim").hidden = false; $("expSheet").hidden = false;
   requestAnimationFrame(function(){ requestAnimationFrame(function(){ $("scrim").classList.add("show"); $("expSheet").classList.add("show"); showTab("buy"); }); });
 }
