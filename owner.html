@@ -85,6 +85,10 @@ button:focus-visible,input:focus-visible,.col:focus-visible{outline:2px solid va
 .seg button{height:42px;border-radius:10px;font-size:15px;font-weight:600;color:var(--muted);position:relative;z-index:1;transition:color .2s}
 .seg button[aria-pressed="true"]{color:var(--fg)}
 .seg-pill{position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 16px)/3);border-radius:10px;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.12);transition:transform .3s cubic-bezier(.22,1,.36,1)}
+.seg.s4{grid-template-columns:repeat(4,1fr)}
+.seg.s4 .seg-pill{width:calc((100% - 20px)/4)}
+.seg.s2{grid-template-columns:repeat(2,1fr)}
+.seg.s2 .seg-pill{width:calc((100% - 12px)/2)}
 .nav{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .nav button{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line)}
 .nav button:disabled{opacity:.3;cursor:default}
@@ -248,11 +252,12 @@ tfoot td{font-weight:700;border-bottom:0}
   <div class="banner" id="banner" hidden></div>
 
   <section class="controls" aria-label="เลือกช่วงเวลา">
-    <div class="seg" role="group" aria-label="ช่วงเวลา">
+    <div class="seg s4" role="group" aria-label="ช่วงเวลา">
       <span class="seg-pill" id="segPill"></span>
-      <button data-mode="7" aria-pressed="true">7 วัน</button>
-      <button data-mode="14" aria-pressed="false">14 วัน</button>
-      <button data-mode="m" aria-pressed="false">รายเดือน</button>
+      <button data-mode="d" aria-pressed="true">วันนี้</button>
+      <button data-mode="w" aria-pressed="false">สัปดาห์</button>
+      <button data-mode="m" aria-pressed="false">เดือน</button>
+      <button data-mode="y" aria-pressed="false">ปี</button>
     </div>
     <div class="nav">
       <button id="prevBtn" aria-label="ช่วงก่อนหน้า"><svg><use href="#i-left"/></svg></button>
@@ -279,6 +284,15 @@ tfoot td{font-weight:700;border-bottom:0}
       <div class="group-k">บัญชี</div>
       <div class="acct" id="acct"></div>
       <div class="mini-row"><button class="mini" id="signOut" type="button">ออกจากระบบ</button></div>
+    </div>
+    <div class="group">
+      <div class="group-k" id="wkK">สัปดาห์เริ่มต้นวัน</div>
+      <div class="seg s2" role="group" aria-labelledby="wkK">
+        <span class="seg-pill" id="wkPill"></span>
+        <button data-wk-opt="0" aria-pressed="false" type="button">อาทิตย์</button>
+        <button data-wk-opt="1" aria-pressed="false" type="button">จันทร์</button>
+      </div>
+      <div class="hint">ใช้กับมุมมอง "สัปดาห์" และลำดับวันในกราฟวันไหนขายดี</div>
     </div>
     <div class="group">
       <div class="group-k">รหัสร้าน (ส่งให้พนักงานเพื่อเข้าร่วม)</div>
@@ -652,7 +666,7 @@ FB.removeMember = function(uid){ return db.doc(FB.path("members/" + uid)).delete
 (function(){
 "use strict";
 /* ================= storage ================= */
-var K = {theme:"q2.theme", cache:"q2.ocache", mode:"q2.omode"};
+var K = {theme:"q2.theme", cache:"q2.ocache", mode:"q2.omode", wk:"q2.wk"};
 function load(k, d){ try{ var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }catch(e){ return d; } }
 function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 var $ = function(id){ return document.getElementById(id); };
@@ -692,52 +706,112 @@ function niceStep(max, n){
 
 /* ================= state & periods ================= */
 var TODAY = now();
-var mode = load(K.mode, "7"); if (["7","14","m"].indexOf(mode) < 0) mode = "7";
-var endDay = TODAY;                                   // window end for 7 / 14 day modes
-var monthDay = mk(TODAY.getFullYear(), TODAY.getMonth(), 1);
+var mode = load(K.mode, "d"); if (["d","w","m","y"].indexOf(mode) < 0) mode = "d";
+var wk = +load(K.wk, 0) === 1 ? 1 : 0;               // first day of week: 0 = Sunday, 1 = Monday
+var anchor = TODAY;                                   // any day inside the period being viewed
+function weekStart(d){ return addDays(d, -((d.getDay() - wk + 7) % 7)); }
+function days_between(a, b){ return Math.round((b - a) / 864e5); }
 
 function windowInfo(){
-  var w = {mode: mode};
-  if (mode === "m"){
-    var y = monthDay.getFullYear(), m = monthDay.getMonth();
+  var w = {mode: mode, gran: "d"}, y = anchor.getFullYear(), m = anchor.getMonth();
+  if (mode === "d"){
+    var isT = ymd(anchor) === ymd(TODAY);
+    w.gran = "h"; w.from = w.to = anchor;
+    w.label = isT ? "วันนี้ · " + fmtDay(anchor) : fmtDay(anchor) + " " + (y + 543);
+    w.title = isT ? "ยอดขายวันนี้" : "ยอดขายวัน" + DAY_F[anchor.getDay()];
+    w.pfrom = w.pto = addDays(anchor, -1);
+    w.cmp = isT ? "เทียบเมื่อวาน (ทั้งวัน)" : "เทียบวันก่อนหน้า";
+    w.canNext = anchor < TODAY;
+  } else if (mode === "w"){
+    w.from = weekStart(anchor); w.to = addDays(w.from, 6);
+    var cur = w.from <= TODAY && TODAY <= w.to;
+    w.label = rangeLabel(w.from, w.to);
+    w.title = cur ? "ยอดขายสัปดาห์นี้" : "ยอดขายสัปดาห์";
+    w.pfrom = addDays(w.from, -7);
+    w.pto = cur ? addDays(w.pfrom, days_between(w.from, TODAY)) : addDays(w.from, -1);
+    w.cmp = cur ? "เทียบสัปดาห์ก่อน (ช่วงเดียวกัน)" : "เทียบสัปดาห์ก่อนหน้า";
+    w.canNext = w.to < TODAY;
+  } else if (mode === "m"){
     w.from = mk(y, m, 1); w.to = mk(y, m + 1, 0);
+    var pf = mk(y, m - 1, 1), pl = mk(y, m, 0), curM = w.from <= TODAY && TODAY <= w.to;
+    var elapsed = curM ? days_between(w.from, TODAY) + 1 : 0;
     w.label = MONTHS[m] + " " + (y + 543);
-    var pf = mk(y, m - 1, 1), pl = mk(y, m, 0);
-    var elapsed = w.to > TODAY ? Math.max(0, Math.round((TODAY - w.from) / 864e5) + 1) : 0;
-    w.pfrom = pf; w.pto = (w.to > TODAY && w.from <= TODAY) ? (elapsed < pl.getDate() ? mk(y, m - 1, elapsed) : pl) : pl;
-    if (w.from > TODAY) w.pto = pl;
+    w.pfrom = pf; w.pto = curM && elapsed < pl.getDate() ? mk(y, m - 1, elapsed) : pl;
     w.cmp = "เทียบเดือนก่อน (" + rangeLabel(w.pfrom, w.pto) + ")";
     w.title = "ยอดขายเดือน" + MONTHS[m];
     w.canNext = w.to < TODAY;
   } else {
-    var n = +mode;
-    w.to = endDay; w.from = addDays(endDay, -(n - 1));
-    w.pto = addDays(w.from, -1); w.pfrom = addDays(w.pto, -(n - 1));
-    w.label = rangeLabel(w.from, w.to);
-    w.cmp = "เทียบ " + n + " วันก่อนหน้า";
-    w.title = "ยอดขาย " + n + " วัน";
-    w.canNext = endDay < TODAY;
+    w.gran = "m"; w.from = mk(y, 0, 1); w.to = mk(y, 11, 31);
+    w.label = "ปี " + (y + 543);
+    w.title = y === TODAY.getFullYear() ? "ยอดขายปีนี้" : "ยอดขายปี " + (y + 543);
+    w.pfrom = null;                                   // no year-over-year: would double the reads
+    w.canNext = y < TODAY.getFullYear();
   }
   return w;
 }
+function step(dir){
+  if (mode === "d") anchor = addDays(anchor, dir);
+  else if (mode === "w") anchor = addDays(anchor, 7 * dir);
+  else if (mode === "m") anchor = mk(anchor.getFullYear(), anchor.getMonth() + dir, 1);
+  else anchor = mk(anchor.getFullYear() + dir, 0, 1);
+  if (anchor > TODAY) anchor = TODAY;
+}
 
 /* ================= data: Google Sheet (or sample data until linked) ================= */
-function getRange(from, to){
+function pad2(n){ return String(n).padStart(2, "0"); }
+function addTo(o, v){ o.total += v.a; o.count++; if (v.m === "cash") o.cash += v.a; if (v.m === "thai") o.thai += v.a; }
+function blank(o){ o.total = 0; o.cash = 0; o.thai = 0; o.count = 0; return o; }
+/* gran: "d" one bar per day, "h" one bar per hour (single day), "m" one bar per month (year view) */
+function getRange(from, to, gran){
   var f = ymd(from), t = ymd(to);
   return FB.withTimeout(FB.db.collection(FB.path("tx")).where("day", ">=", f).where("day", "<=", t).get(), 20000).then(function(q){
-    var days = [], idx = {};
-    for (var d = from; d <= to; d = addDays(d, 1)){ var k = ymd(d); idx[k] = days.length; days.push({date:k, total:0, cash:0, thai:0, count:0}); }
+    var daily = [], idx = {}, i;
+    for (var d = from; d <= to; d = addDays(d, 1)){ var k = ymd(d); idx[k] = daily.length; daily.push(blank({date:k, start:k})); }
+    var hrs = [], mons = [];
+    for (i = 0; i < 24; i++) hrs.push(blank({h:i}));
+    for (i = 0; i < 12; i++) mons.push(blank({}));
     var by = {};
     q.forEach(function(doc){
       var v = doc.data(); if (v.status !== "ok") return;
-      var i = idx[v.day]; if (i === undefined) return;
-      var o = days[i]; o.total += v.a; o.count++; if (v.m === "cash") o.cash += v.a; if (v.m === "thai") o.thai += v.a;
+      var di = idx[v.day]; if (di === undefined) return;
+      addTo(daily[di], v);
+      if (gran === "h") addTo(hrs[new Date(v.t).getHours()], v);
+      if (gran === "m") addTo(mons[+v.day.slice(5, 7) - 1], v);
       var n = v.seller || "ไม่ระบุ", b = by[n] || (by[n] = {name:n, total:0, count:0, cash:0, thai:0});
       b.total += v.a; b.count++; if (v.m === "cash") b.cash += v.a; if (v.m === "thai") b.thai += v.a;
     });
+    var items;
+    if (gran === "h"){
+      var lo = 7, hi = 19;
+      hrs.forEach(function(o, h){ if (o.count){ if (h < lo) lo = h; if (h > hi) hi = h; } });
+      var fd = fmtDay(from) + " " + (from.getFullYear() + 543);
+      items = hrs.slice(lo, hi + 1).map(function(o){
+        var span = pad2(o.h) + ":00–" + pad2(o.h) + ":59 น.";
+        o.date = f + "T" + pad2(o.h); o.start = f; o.nm = span; o.lbl = fd + " · " + span; o.x = o.h % 3 === 0 ? String(o.h) : ""; o.xs = ""; return o;
+      });
+    } else if (gran === "m"){
+      var y = from.getFullYear();
+      items = mons.map(function(o, mi){
+        o.date = y + "-" + pad2(mi + 1); o.start = o.date + "-01"; o.nm = MONTHS[mi]; o.lbl = MONTHS[mi] + " " + (y + 543); o.x = String(mi + 1); o.xs = ""; return o;
+      });
+    } else {
+      var many = daily.length > 8;
+      daily.forEach(function(o){
+        var dd = parse(o.date), dn = dd.getDate();
+        o.nm = fmtDay(dd); o.lbl = fmtDay(dd) + " " + (dd.getFullYear() + 543);
+        o.x = (!many || dn === 1 || (dn % 5 === 0 && dn <= 30)) ? String(dn) : ""; o.xs = many ? "" : DAY_S[dd.getDay()].replace(".", "");
+      });
+      items = daily;
+    }
     var sellers = Object.keys(by).map(function(k){ return by[k]; }).sort(function(a, b){ return b.total - a.total; });
-    return {ok:true, days:days, sellers:sellers};
+    return {ok:true, days:items, daily:daily, sellers:sellers};
   });
+}
+function isNow(d){
+  var tk = ymd(TODAY), g = ctx && ctx.w ? ctx.w.gran : "d";
+  if (g === "h") return d.date === tk + "T" + pad2(new Date().getHours());
+  if (g === "m") return d.date === tk.slice(0, 7);
+  return d.date === tk;
 }
 
 /* offline cache of the last good response per period */
@@ -755,14 +829,14 @@ function qrOf(d){ return d.total - d.cash - (d.thai || 0); }
 function sum(a, f){ return a.reduce(function(s, x){ return s + f(x); }, 0); }
 function stats(days){
   var tk = ymd(TODAY);
-  var open = days.filter(function(d){ return d.count > 0 && d.date <= tk; });
+  var open = days.filter(function(d){ return d.count > 0 && d.start <= tk; });
   var total = sum(days, function(d){ return d.total; }), cash = sum(days, function(d){ return d.cash; });
   var thai = sum(days, function(d){ return d.thai || 0; });
   var s = {total: total, cash: cash, thai: thai, qr: total - cash - thai, count: sum(days, function(d){ return d.count; }), open: open, avg: open.length ? Math.round(total / open.length) : 0};
   var byTotal = open.slice().sort(function(a, b){ return b.total - a.total || (a.date < b.date ? -1 : 1); });
   s.best = byTotal[0] || null;
   s.top = byTotal.slice(0, 3);
-  s.low = open.length >= 4 ? byTotal[byTotal.length - 1] : null;
+  s.low = (open.length >= 4 && ctx && ctx.w.gran !== "h") ? byTotal[byTotal.length - 1] : null;
   return s;
 }
 
@@ -779,13 +853,13 @@ function paint(res, prevRes, w, meta){
   var col = h("div"); col.style.cssText = "display:flex;flex-direction:column;gap:18px";
   if (!S.open.length){
     var e = h("div", "card empty"); e.appendChild(h("b", "", "ยังไม่มีรายการขายในช่วงนี้"));
-    e.appendChild(document.createTextNode(mode === "m" ? "ลองกดลูกศรเพื่อดูเดือนอื่น" : "ลองกดลูกศรเพื่อดูช่วงก่อนหน้า"));
+    e.appendChild(document.createTextNode(mode === "m" ? "ลองกดลูกศรเพื่อดูเดือนอื่น" : mode === "y" ? "ลองกดลูกศรเพื่อดูปีอื่น" : "ลองกดลูกศรเพื่อดูช่วงก่อนหน้า"));
     col.appendChild(e); body.appendChild(col); return;
   }
   col.appendChild(renderChartCard(res.days, S));
   col.appendChild(renderBest(S));
   col.appendChild(renderSplit(S));
-  if (mode !== "7" && S.open.length >= 4){ var wk = renderWeekday(S); if (wk) col.appendChild(wk); }
+  if ((mode === "m" || mode === "y") && res.daily){ var wkc = renderWeekday(res.daily); if (wkc) col.appendChild(wkc); }
   if (res.sellers && res.sellers.length) col.appendChild(renderSellers(res.sellers));
   body.appendChild(col);
   selectCol(S.best ? res.days.indexOf(res.days.filter(function(d){ return d.date === S.best.date; })[0]) : -1);
@@ -824,16 +898,16 @@ function renderHero(S, P, w){
   el.appendChild(meta);
   var m2 = h("div", "hero-meta"); m2.style.marginTop = "4px";
   m2.appendChild(h("span", "num", S.count.toLocaleString("en-US") + " รายการ"));
-  if (S.open.length) m2.appendChild(h("span", "num", "เฉลี่ย " + baht(S.avg) + " ต่อวันที่เปิดขาย"));
+  if (w.gran === "h"){ if (S.count) m2.appendChild(h("span", "num", "เฉลี่ย " + baht(Math.round(S.total / S.count)) + " ต่อรายการ")); }
+  else if (S.open.length) m2.appendChild(h("span", "num", "เฉลี่ย " + baht(S.avg) + " ต่อ" + (w.gran === "m" ? "เดือน" : "วัน") + "ที่เปิดขาย"));
   el.appendChild(m2);
 }
 
 function renderBest(S){
-  var c = h("div", "card best"); c.tabIndex = 0; c.setAttribute("role", "button"); c.setAttribute("aria-label", "ดูวันที่ยอดขายสูงสุดในกราฟ");
-  c.appendChild(h("h2", "", "วันที่ขายดีที่สุด"));
+  var c = h("div", "card best"); c.tabIndex = 0; c.setAttribute("role", "button"); c.setAttribute("aria-label", "ดูช่วงที่ยอดขายสูงสุดในกราฟ");
+  c.appendChild(h("h2", "", ctx.w.gran === "h" ? "ชั่วโมงที่ขายดีที่สุด" : ctx.w.gran === "m" ? "เดือนที่ขายดีที่สุด" : "วันที่ขายดีที่สุด"));
   var top = h("div", "best-top");
-  var bd = parse(S.best.date);
-  top.appendChild(h("div", "best-day", fmtDay(bd)));
+  top.appendChild(h("div", "best-day", S.best.nm));
   top.appendChild(h("div", "best-amt num", baht(S.best.total)));
   c.appendChild(top);
   var up = S.avg > 0 ? Math.round((S.best.total - S.avg) / S.avg * 100) : 0;
@@ -842,11 +916,11 @@ function renderBest(S){
     var ul = h("ul", "rank");
     S.top.forEach(function(d, i){
       var li = h("li"); li.appendChild(h("span", "n", String(i + 1)));
-      li.appendChild(h("span", "d", fmtDay(parse(d.date)))); li.appendChild(h("span", "a num", baht(d.total))); ul.appendChild(li);
+      li.appendChild(h("span", "d", d.nm)); li.appendChild(h("span", "a num", baht(d.total))); ul.appendChild(li);
     });
     if (S.low){
       var lw = h("li", "low"); lw.appendChild(h("span", "n", "↓"));
-      lw.appendChild(h("span", "d", "ต่ำสุด " + fmtDay(parse(S.low.date)))); lw.appendChild(h("span", "a num", baht(S.low.total))); ul.appendChild(lw);
+      lw.appendChild(h("span", "d", "ต่ำสุด " + S.low.nm)); lw.appendChild(h("span", "a num", baht(S.low.total))); ul.appendChild(lw);
     }
     c.appendChild(ul);
   }
@@ -878,9 +952,8 @@ function renderChartCard(days, S){
   var cols = h("div", "cols"), tk = ymd(TODAY), n = days.length;
   var bestKey = S.best ? S.best.date : "";
   days.forEach(function(d, i){
-    var c = h("button", "col" + (d.date > tk ? " future" : "")); c.type = "button"; c.dataset.i = i;
-    var dd = parse(d.date);
-    c.setAttribute("aria-label", fmtDay(dd) + " รวม " + baht(d.total) + " QR " + baht(qrOf(d)) + " เงินสด " + baht(d.cash) + (d.thai ? " ไทยช่วยไทย " + baht(d.thai) : "") + " " + d.count + " รายการ");
+    var c = h("button", "col" + (d.start > tk ? " future" : "")); c.type = "button"; c.dataset.i = i;
+    c.setAttribute("aria-label", d.lbl + " รวม " + baht(d.total) + " QR " + baht(qrOf(d)) + " เงินสด " + baht(d.cash) + (d.thai ? " ไทยช่วยไทย " + baht(d.thai) : "") + " " + d.count + " รายการ");
     if (d.total > 0){
       var bar = h("div", "bar"); bar.style.height = (d.total / 100 / top * 100) + "%";
       var q = qrOf(d);
@@ -902,9 +975,8 @@ function renderChartCard(days, S){
   plot.appendChild(cols); chart.appendChild(plot);
   var xr = h("div", "xrow");
   days.forEach(function(d){
-    var dd = parse(d.date), dn = dd.getDate(), show = mode === "m" ? (dn === 1 || dn % 5 === 0 && dn <= 30) : true;
-    var x = h("div", "xl" + (d.date === tk ? " today" : ""));
-    if (show){ x.appendChild(document.createTextNode(String(dn))); if (mode !== "m") x.appendChild(h("small", "", DAY_S[dd.getDay()].replace(".", ""))); }
+    var x = h("div", "xl" + (isNow(d) ? " today" : ""));
+    if (d.x){ x.appendChild(document.createTextNode(d.x)); if (d.xs) x.appendChild(h("small", "", d.xs)); }
     xr.appendChild(x);
   });
   chart.appendChild(xr); card.appendChild(chart);
@@ -917,8 +989,8 @@ function selectCol(i){
   document.querySelectorAll(".col").forEach(function(c){ c.classList.toggle("sel", +c.dataset.i === i); });
   ro.textContent = "";
   if (i < 0 || !ctx.res.days[i]) { ro.appendChild(h("div", "ro-date", "แตะแท่งกราฟเพื่อดูรายละเอียด")); return; }
-  var d = ctx.res.days[i], dd = parse(d.date);
-  var r1 = h("div", "ro-row"); r1.appendChild(h("span", "ro-date", fmtDay(dd) + " " + (dd.getFullYear() + 543))); r1.appendChild(h("span", "ro-total num", baht(d.total))); ro.appendChild(r1);
+  var d = ctx.res.days[i];
+  var r1 = h("div", "ro-row"); r1.appendChild(h("span", "ro-date", d.lbl)); r1.appendChild(h("span", "ro-total num", baht(d.total))); ro.appendChild(r1);
   var r2 = h("div", "ro-split num");
   [["qr", "QR", qrOf(d)], ["cash", "เงินสด", d.cash], ["thai", "ไทยช่วยไทย", d.thai || 0]].forEach(function(x){
     if (x[0] === "thai" && !x[2]) return;
@@ -931,11 +1003,11 @@ function renderTable(days){
   var wrap = h("div", "tbl-wrap"), t = h("table"), tk = ymd(TODAY);
   var thead = h("thead"), tr = h("tr");
   var hasThai = days.some(function(d){ return d.thai > 0; });
-  ["วันที่", "รวม", "QR", "เงินสด"].concat(hasThai ? ["ไทยช่วยไทย"] : [], ["รายการ"]).forEach(function(x){ tr.appendChild(h("th", "", x)); }); thead.appendChild(tr); t.appendChild(thead);
+  [ctx.w.gran === "h" ? "เวลา" : ctx.w.gran === "m" ? "เดือน" : "วันที่", "รวม", "QR", "เงินสด"].concat(hasThai ? ["ไทยช่วยไทย"] : [], ["รายการ"]).forEach(function(x){ tr.appendChild(h("th", "", x)); }); thead.appendChild(tr); t.appendChild(thead);
   var tb = h("tbody"), tot = {t:0, c:0, h:0, n:0};
   days.forEach(function(d){
-    if (d.date > tk) return;
-    var r = h("tr"); r.appendChild(h("td", "", fmtDay(parse(d.date))));
+    if (d.start > tk || (ctx.w.gran === "h" && !d.count)) return;
+    var r = h("tr"); r.appendChild(h("td", "", d.nm));
     [money(d.total), money(qrOf(d)), money(d.cash)].concat(hasThai ? [money(d.thai || 0)] : [], [String(d.count)]).forEach(function(x){ r.appendChild(h("td", "", x)); });
     tb.appendChild(r); tot.t += d.total; tot.c += d.cash; tot.h += d.thai || 0; tot.n += d.count;
   });
@@ -961,16 +1033,18 @@ function renderSplit(S){
   c.appendChild(lg); return c;
 }
 
-function renderWeekday(S){
+function renderWeekday(daily){
+  var tk = ymd(TODAY), open = daily.filter(function(d){ return d.count > 0 && d.start <= tk; });
+  if (open.length < 4) return null;
   var sumW = [0,0,0,0,0,0,0], nW = [0,0,0,0,0,0,0];
-  S.open.forEach(function(d){ var w = parse(d.date).getDay(); sumW[w] += d.total; nW[w]++; });
+  open.forEach(function(d){ var w = parse(d.date).getDay(); sumW[w] += d.total; nW[w]++; });
   var avg = sumW.map(function(v, i){ return nW[i] ? Math.round(v / nW[i]) : 0; });
   var max = Math.max.apply(null, avg); if (max <= 0) return null;
   var bi = avg.indexOf(max);
   var c = h("section", "card"); c.appendChild(h("h2", "", "วันไหนของสัปดาห์ขายดี"));
   c.appendChild(h("div", "sub", "ยอดเฉลี่ยต่อวันที่เปิดขาย · ดีที่สุดคือวัน" + DAY_F[bi]));
   var hb = h("div", "hbars");
-  [0,1,2,3,4,5,6].forEach(function(w){
+  [0,1,2,3,4,5,6].map(function(k){ return (wk + k) % 7; }).forEach(function(w){
     var r = h("div", "hrow" + (w === bi ? " hi" : "")), t = h("div", "t"), i = h("i");
     i.style.width = (avg[w] / max * 100) + "%"; t.appendChild(i);
     r.appendChild(h("span", "l", DAY_F[w])); r.appendChild(t); r.appendChild(h("span", "v", nW[w] ? baht(avg[w]) : "–")); hb.appendChild(r);
@@ -995,9 +1069,9 @@ function refresh(){
   var my = ++reqId, w = windowInfo();
   syncControls(w);
   $("stage").classList.add("loading"); $("refreshBtn").classList.add("spin");
-  var key = FB.ctx.shopId + "|" + ymd(w.from) + "|" + ymd(w.to);
+  var key = "r3|" + FB.ctx.shopId + "|" + w.gran + "|" + ymd(w.from) + "|" + ymd(w.to);
   var done = function(){ if (my !== reqId) return false; $("stage").classList.remove("loading"); $("refreshBtn").classList.remove("spin"); return true; };
-  Promise.all([getRange(w.from, w.to), getRange(w.pfrom, w.pto).catch(function(){ return null; })]).then(function(r){
+  Promise.all([getRange(w.from, w.to, w.gran), w.pfrom ? getRange(w.pfrom, w.pto, w.gran).catch(function(){ return null; }) : Promise.resolve(null)]).then(function(r){
     if (!done()) return;
     if (!r[0].demo) cachePut(key, {t: Date.now(), cur: r[0], prev: r[1]});
     $("updated").textContent = r[0].demo ? "ข้อมูลตัวอย่าง" : "อัปเดต " + timeStr(Date.now());
@@ -1020,22 +1094,18 @@ function showError(e, w){
 
 function syncControls(w){
   document.querySelectorAll("[data-mode]").forEach(function(b){ b.setAttribute("aria-pressed", String(b.dataset.mode === mode)); });
-  $("segPill").style.transform = "translateX(calc(" + ["7","14","m"].indexOf(mode) + " * (100% + 4px)))";
+  $("segPill").style.transform = "translateX(calc(" + ["d","w","m","y"].indexOf(mode) + " * (100% + 4px)))";
   $("navLabel").textContent = w.label; $("nextBtn").disabled = !w.canNext;
 }
 document.querySelectorAll("[data-mode]").forEach(function(b){
   b.addEventListener("click", function(){
+    var w0 = windowInfo(); if (w0.from <= TODAY && TODAY <= w0.to) anchor = TODAY;
     mode = b.dataset.mode; save(K.mode, mode);
-    if (mode === "m") monthDay = mk(endDay.getFullYear(), endDay.getMonth(), 1); else if (endDay > TODAY) endDay = TODAY;
     refresh();
   });
 });
-$("prevBtn").addEventListener("click", function(){ if (mode === "m") monthDay = mk(monthDay.getFullYear(), monthDay.getMonth() - 1, 1); else endDay = addDays(endDay, -(+mode)); refresh(); });
-$("nextBtn").addEventListener("click", function(){
-  if (mode === "m") monthDay = mk(monthDay.getFullYear(), monthDay.getMonth() + 1, 1);
-  else { endDay = addDays(endDay, +mode); if (endDay > TODAY) endDay = TODAY; }
-  refresh();
-});
+$("prevBtn").addEventListener("click", function(){ step(-1); refresh(); });
+$("nextBtn").addEventListener("click", function(){ step(1); refresh(); });
 $("refreshBtn").addEventListener("click", refresh);
 
 /* ================= settings ================= */
@@ -1112,7 +1182,7 @@ $("csvBtn").addEventListener("click", function(){
 var isOpen = false;
 function openSheet(){
   if (isOpen) return; isOpen = true;
-  syncTheme(); renderAccount(); loadCode(); loadMembers(); mHint(""); $("csvHint").textContent = "";
+  syncTheme(); syncWk(); renderAccount(); loadCode(); loadMembers(); mHint(""); $("csvHint").textContent = "";
   if (!$("mDate").value) $("mDate").value = ymd(now());
   $("scrim").hidden = false; $("setSheet").hidden = false;
   requestAnimationFrame(function(){ requestAnimationFrame(function(){ $("scrim").classList.add("show"); $("setSheet").classList.add("show"); }); });
@@ -1146,6 +1216,13 @@ function syncTheme(){
 document.querySelectorAll("[data-theme-opt]").forEach(function(b){ b.addEventListener("click", function(){ save(K.theme, b.dataset.themeOpt); applyTheme(); }); });
 if (mql){ (mql.addEventListener ? mql.addEventListener("change", applyTheme) : mql.addListener(applyTheme)); }
 
+function syncWk(){
+  document.querySelectorAll("[data-wk-opt]").forEach(function(b){ b.setAttribute("aria-pressed", String(+b.dataset.wkOpt === wk)); });
+  $("wkPill").style.transform = "translateX(calc(" + wk + " * (100% + 4px)))";
+}
+document.querySelectorAll("[data-wk-opt]").forEach(function(b){ b.addEventListener("click", function(){ wk = +b.dataset.wkOpt; save(K.wk, wk); syncWk(); }); });
+syncWk();
+
 /* ================= PWA icon + manifest built in-page (a different icon from the cashier app) ================= */
 function makeIcon(size){
   try{
@@ -1173,7 +1250,7 @@ function makeIcon(size){
 /* ================= boot ================= */
 document.addEventListener("visibilitychange", function(){
   if (document.hidden || isOpen || !FB.ctx) return;
-  var n = now(); if (ymd(n) !== ymd(TODAY)){ var wasToday = ymd(endDay) === ymd(TODAY); TODAY = n; if (wasToday) endDay = n; monthDay = mk(n.getFullYear(), n.getMonth(), 1); }
+  var n = now(); if (ymd(n) !== ymd(TODAY)){ var w0 = windowInfo(), wasNow = w0.from <= TODAY && TODAY <= w0.to; TODAY = n; if (wasNow) anchor = n; }
   refresh();
 });
 applyTheme();
