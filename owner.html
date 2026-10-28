@@ -238,6 +238,7 @@ tfoot td{font-weight:700;border-bottom:0}
 .pu-total{display:flex;justify-content:space-between;font-size:15px;padding:2px 4px 10px;color:var(--muted)}
 .pu-total b{color:var(--fg)}
 .mem .nm{white-space:normal;overflow:visible}
+.mem .mini{height:34px;padding:0 10px;font-size:13px;flex:none}
 .fedit{display:flex;flex-direction:column;gap:8px;padding:6px 0 10px}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
 
@@ -755,6 +756,14 @@ FB.members = function(){
   });
 };
 FB.removeMember = function(uid){ return db.doc(FB.path("members/" + uid)).delete(); };
+FB.renameMember = function(uid, name){
+  return db.doc(FB.path("members/" + uid)).update({name:name}).then(function(){
+    if (FB.ctx && FB.ctx.uid === uid){
+      FB.ctx.name = name; lsSet("q2.ctx." + uid, FB.ctx);
+      try{ if (auth.currentUser) auth.currentUser.updateProfile({displayName:name}).catch(function(){}); }catch(e){}
+    }
+  });
+};
 })();
 </script>
 <script>
@@ -853,13 +862,17 @@ function step(dir){
 }
 
 /* ================= data: Google Sheet (or sample data until linked) ================= */
+var memMap = null, memP = null;     // current member names, so a renamed seller stays one row in the report
+function ensureMem(){
+  return memP || (memP = FB.members().then(function(list){ memMap = {}; list.forEach(function(m){ memMap[m.uid] = m; }); }, function(){ memMap = {}; }));
+}
 function pad2(n){ return String(n).padStart(2, "0"); }
 function addTo(o, v){ o.total += v.a; o.count++; if (v.m === "cash") o.cash += v.a; if (v.m === "thai") o.thai += v.a; }
 function blank(o){ o.total = 0; o.cash = 0; o.thai = 0; o.count = 0; return o; }
 /* gran: "d" one bar per day, "h" one bar per hour (single day), "m" one bar per month (year view) */
 function getRange(from, to, gran){
   var f = ymd(from), t = ymd(to);
-  return FB.withTimeout(FB.db.collection(FB.path("tx")).where("day", ">=", f).where("day", "<=", t).get(), 20000).then(function(q){
+  return ensureMem().then(function(){ return FB.withTimeout(FB.db.collection(FB.path("tx")).where("day", ">=", f).where("day", "<=", t).get(), 20000); }).then(function(q){
     var daily = [], idx = {}, i;
     for (var d = from; d <= to; d = addDays(d, 1)){ var k = ymd(d); idx[k] = daily.length; daily.push(blank({date:k, start:k})); }
     var hrs = [], mons = [];
@@ -872,7 +885,8 @@ function getRange(from, to, gran){
       addTo(daily[di], v);
       if (gran === "h") addTo(hrs[new Date(v.t).getHours()], v);
       if (gran === "m") addTo(mons[+v.day.slice(5, 7) - 1], v);
-      var n = v.seller || "ไม่ระบุ", b = by[n] || (by[n] = {name:n, total:0, count:0, cash:0, thai:0});
+      var mm = memMap && memMap[v.uid], isS = mm && mm.role === "seller", n = isS ? "u:" + v.uid : "n:" + (v.seller || "ไม่ระบุ");
+      var b = by[n] || (by[n] = {name: isS ? mm.name : (v.seller || "ไม่ระบุ"), total:0, count:0, cash:0, thai:0});
       b.total += v.a; b.count++; if (v.m === "cash") b.cash += v.a; if (v.m === "thai") b.thai += v.a;
     });
     var items;
@@ -1250,6 +1264,7 @@ function renderPurchases(w){
 /* ================= loading ================= */
 var reqId = 0;
 function refresh(){
+  memP = null;
   var my = ++reqId, w = windowInfo();
   syncControls(w);
   $("stage").classList.add("loading"); $("refreshBtn").classList.add("spin");
@@ -1322,6 +1337,23 @@ function loadMembers(){
     list.forEach(function(m){
       var row = h("div", "mem"), nm = h("div", "nm"); nm.appendChild(document.createTextNode(m.name)); nm.appendChild(h("small", "", (m.role === "owner" ? "เจ้าของร้าน" : "พนักงาน") + (m.email ? " · " + m.email : "")));
       row.appendChild(nm);
+      var eb = h("button", "mini", "แก้ชื่อ"); eb.type = "button";
+      eb.addEventListener("click", function(){
+        if (row.nextSibling && row.nextSibling.className === "fedit"){ row.parentNode.removeChild(row.nextSibling); return; }
+        var ed = h("div", "fedit"), inp = document.createElement("input"), ok = h("button", "mini", "บันทึก"), cn = h("button", "mini", "ยกเลิก"), msg = h("div", "hint"), r2 = h("div", "mini-row");
+        inp.className = "text-in"; inp.type = "text"; inp.maxLength = 40; inp.value = m.name; inp.setAttribute("aria-label", "ชื่อ");
+        ok.type = "button"; cn.type = "button"; r2.appendChild(ok); r2.appendChild(cn);
+        ed.appendChild(inp); ed.appendChild(msg); ed.appendChild(r2);
+        row.parentNode.insertBefore(ed, row.nextSibling); inp.focus();
+        cn.addEventListener("click", function(){ if (ed.parentNode) ed.parentNode.removeChild(ed); });
+        ok.addEventListener("click", function(){
+          var v = inp.value.trim().slice(0, 40);
+          if (!v){ msg.textContent = "ใส่ชื่อ"; msg.className = "hint bad"; return; }
+          ok.disabled = true; msg.textContent = "กำลังบันทึก…"; msg.className = "hint ok";
+          FB.renameMember(m.uid, v).then(function(){ memP = null; if (m.uid === FB.ctx.uid) renderAccount(); loadMembers(); expChanged = true; }, function(e){ ok.disabled = false; msg.textContent = FB.errMsg(e); msg.className = "hint bad"; });
+        });
+      });
+      row.appendChild(eb);
       if (m.role !== "owner" && m.uid !== FB.ctx.uid){
         var b = h("button", "mini danger", "เอาออก"); b.type = "button";
         b.addEventListener("click", function(){
