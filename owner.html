@@ -221,6 +221,24 @@ tfoot td{font-weight:700;border-bottom:0}
 .btn{height:54px;border-radius:18px;font-size:17px;font-weight:650;background:var(--accent);color:var(--on-accent)}
 .note{font-size:13px;color:var(--muted);line-height:1.6;padding:0 4px;margin:0}
 
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{height:38px;padding:0 14px;border-radius:999px;background:var(--surface-2);font-size:14px;font-weight:600;border:1px solid transparent}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.profit-big{font-size:38px;font-weight:700;letter-spacing:-.025em;line-height:1.1;margin:4px 0 10px}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+.prow{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:15px;color:var(--muted);border-top:1px solid var(--line)}
+.prow b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
+.pu{display:flex;gap:10px;align-items:baseline;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+.pu .dd{flex:none;min-width:88px;font-weight:600}
+.pu .nn{flex:1;min-width:0;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pu .aa{font-weight:650;font-variant-numeric:tabular-nums;flex:none}
+.pu.sub{border-top:0;padding:4px 0 4px 12px;font-size:14px}
+.pu.sub .nn{color:var(--fg)}
+.pu .mini{height:32px;padding:0 10px;font-size:13px;flex:none}
+.pu-total{display:flex;justify-content:space-between;font-size:15px;padding:2px 4px 10px;color:var(--muted)}
+.pu-total b{color:var(--fg)}
+.mem .nm{white-space:normal;overflow:visible}
+.fedit{display:flex;flex-direction:column;gap:8px;padding:6px 0 10px}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
 </style>
 <!--HEAD-END-->
@@ -237,6 +255,7 @@ tfoot td{font-weight:700;border-bottom:0}
     <symbol id="i-up" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 3 19h18z"/></symbol>
     <symbol id="i-down" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20 3 5h18z"/></symbol>
     <symbol id="i-flat" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="10" width="16" height="4" rx="2"/></symbol>
+    <symbol id="i-bill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v18l2.4-1.6L10 21l2-1.6L14 21l2.6-1.6L19 21V3l-2.4 1.6L14 3l-2 1.6L10 3 7.4 4.6z"/><path d="M9 9h6M9 13h6"/></symbol>
   </defs>
 </svg>
 
@@ -244,6 +263,7 @@ tfoot td{font-weight:700;border-bottom:0}
   <header class="top">
     <div class="brand"><h1>ยอดขายร้าน</h1><small id="updated">&nbsp;</small></div>
     <div class="icons">
+      <button class="icon-btn" id="openExp" aria-label="รายจ่าย"><svg><use href="#i-bill"/></svg></button>
       <button class="icon-btn" id="refreshBtn" aria-label="โหลดข้อมูลใหม่"><svg><use href="#i-refresh"/></svg></button>
       <button class="icon-btn" id="openSettings" aria-label="ตั้งค่า"><svg><use href="#i-gear"/></svg></button>
     </div>
@@ -337,6 +357,64 @@ tfoot td{font-weight:700;border-bottom:0}
     </div>
     <p class="note">หน้านี้เปิดได้เฉพาะบัญชีเจ้าของร้าน ข้อมูลที่โหลดล่าสุดจะเก็บไว้ในเครื่องนี้ไว้ดูตอนไม่มีอินเทอร์เน็ต</p>
     <button class="btn" id="setDone">เสร็จสิ้น</button>
+  </div>
+</section>
+
+<section class="sheet" id="expSheet" role="dialog" aria-modal="true" aria-labelledby="expTitle" hidden>
+  <div class="grabber"></div>
+  <div class="sheet-head">
+    <h2 class="sheet-title" id="expTitle">รายจ่าย</h2>
+    <button class="close-btn" id="expClose" aria-label="ปิด"><svg><use href="#i-x"/></svg></button>
+  </div>
+  <div class="sheet-body">
+    <div class="seg s2" role="group" aria-label="ประเภทรายจ่าย">
+      <span class="seg-pill" id="etPill"></span>
+      <button data-etab="buy" aria-pressed="true" type="button">ซื้อของ</button>
+      <button data-etab="fix" aria-pressed="false" type="button">รายเดือน</button>
+    </div>
+
+    <div id="pBuy" style="display:flex;flex-direction:column;gap:14px">
+      <div class="group">
+        <div class="group-k" id="eFormK">เพิ่มรายการซื้อของ</div>
+        <input class="text-in" id="eDate" type="date" aria-label="วันที่ซื้อ">
+        <input class="text-in" id="eName" type="text" maxlength="60" list="eNames" autocomplete="off" placeholder="ซื้ออะไร (เช่น หมู ผัก ถุง)" aria-label="รายการที่ซื้อ">
+        <datalist id="eNames"></datalist>
+        <input class="text-in" id="eAmt" type="number" inputmode="decimal" step="0.01" min="0" placeholder="จำนวนเงิน (บาท)" aria-label="จำนวนเงินเป็นบาท">
+        <div class="chips" id="eCats"></div>
+        <input class="text-in" id="eCatNew" type="text" maxlength="20" placeholder="ชื่อหมวดใหม่" hidden aria-label="ชื่อหมวดใหม่">
+        <div class="hint" id="eHint"></div>
+        <div class="mini-row">
+          <button class="mini" id="eSave" type="button">บันทึกซื้อของ</button>
+          <button class="mini" id="eCancel" type="button" hidden>ยกเลิกการแก้ไข</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="group-k">รายการที่ซื้อ</div>
+        <div class="nav">
+          <button id="ePrev" type="button" aria-label="เดือนก่อนหน้า"><svg><use href="#i-left"/></svg></button>
+          <div class="nav-label" id="eMonth"></div>
+          <button id="eNext" type="button" aria-label="เดือนถัดไป"><svg><use href="#i-right"/></svg></button>
+        </div>
+        <div id="eList"></div>
+      </div>
+    </div>
+
+    <div id="pFix" style="display:none;flex-direction:column;gap:14px">
+      <div class="group">
+        <div class="group-k">ค่าใช้จ่ายที่ใช้อยู่ตอนนี้ (ต่อเดือน)</div>
+        <div id="fList"></div>
+      </div>
+      <div class="group">
+        <div class="group-k">เพิ่มค่าใช้จ่ายรายเดือน</div>
+        <input class="text-in" id="fName" type="text" maxlength="40" placeholder="ชื่อ เช่น ค่าเช่าร้าน เงินเดือน" aria-label="ชื่อค่าใช้จ่าย">
+        <input class="text-in" id="fAmt" type="number" inputmode="decimal" step="0.01" min="0" placeholder="บาทต่อเดือน" aria-label="บาทต่อเดือน">
+        <div class="group-k" style="margin-top:4px">เริ่มคิดตั้งแต่เดือน</div>
+        <select class="text-in" id="fFrom" aria-label="เริ่มคิดตั้งแต่เดือน"></select>
+        <div class="hint" id="fHint">ค่าที่ไม่เท่ากันทุกเดือน (เช่น ค่าไฟ) ให้ลงที่แท็บ "ซื้อของ" หมวด "อื่นๆ" แทน</div>
+        <div class="mini-row"><button class="mini" id="fAdd" type="button">เพิ่มรายการ</button></div>
+      </div>
+    </div>
+    <button class="btn" id="expDone">เสร็จสิ้น</button>
   </div>
 </section>
 
@@ -843,24 +921,26 @@ function stats(days){
 /* ================= rendering ================= */
 var cur = null, sel = -1, tableView = false, ctx = null;
 
-function paint(res, prevRes, w, meta){
-  cur = res; ctx = {res: res, prev: prevRes, w: w, meta: meta || {}};
+function paint(res, prevRes, w, meta, extra){
+  cur = res; ctx = {res: res, prev: prevRes, w: w, meta: meta || {}, extra: extra || null};
   var S = stats(res.days), P = prevRes ? stats(prevRes.days) : null;
   ctx.S = S; ctx.P = P;
   renderBanner();
   renderHero(S, P, w);
   var body = $("body"); body.textContent = "";
   var col = h("div"); col.style.cssText = "display:flex;flex-direction:column;gap:18px";
+  var pc = renderProfit(S, w); if (pc) col.appendChild(pc);
   if (!S.open.length){
     var e = h("div", "card empty"); e.appendChild(h("b", "", "ยังไม่มีรายการขายในช่วงนี้"));
     e.appendChild(document.createTextNode(mode === "m" ? "ลองกดลูกศรเพื่อดูเดือนอื่น" : mode === "y" ? "ลองกดลูกศรเพื่อดูปีอื่น" : "ลองกดลูกศรเพื่อดูช่วงก่อนหน้า"));
-    col.appendChild(e); body.appendChild(col); return;
+    col.appendChild(e); var pe = renderPurchases(w); if (pe) col.appendChild(pe); body.appendChild(col); return;
   }
   col.appendChild(renderChartCard(res.days, S));
   col.appendChild(renderBest(S));
   col.appendChild(renderSplit(S));
   if ((mode === "m" || mode === "y") && res.daily){ var wkc = renderWeekday(res.daily); if (wkc) col.appendChild(wkc); }
   if (res.sellers && res.sellers.length) col.appendChild(renderSellers(res.sellers));
+  var pu = renderPurchases(w); if (pu) col.appendChild(pu);
   body.appendChild(col);
   selectCol(S.best ? res.days.indexOf(res.days.filter(function(d){ return d.date === S.best.date; })[0]) : -1);
 }
@@ -1063,23 +1143,110 @@ function renderSellers(list){
   c.appendChild(hb); return c;
 }
 
+/* ================= expenses: profit + purchases cards ================= */
+function ymOf(d){ return d.getFullYear() + "-" + pad2(d.getMonth() + 1); }
+function fixedFor(list, m){ var t = 0; list.forEach(function(f){ if (f.since <= m && (!f.until || f.until >= m)) t += f.a; }); return t; }
+function prevYm(m){ var y = +m.slice(0, 4), n = +m.slice(5, 7); return n === 1 ? (y - 1) + "-12" : y + "-" + pad2(n - 1); }
+function getExtra(w){
+  var f = ymd(w.from), t = ymd(w.to), full = w.mode === "m" || w.mode === "y";
+  var pe = FB.withTimeout(FB.db.collection(FB.path("exp")).where("day", ">=", f).where("day", "<=", t).get(), 20000).then(function(q){
+    var a = []; q.forEach(function(d){ var v = d.data(); a.push({id:d.id, day:v.day, a:v.a, name:v.name, cat:v.cat || ""}); }); return a;
+  });
+  var pf = full ? FB.withTimeout(FB.db.collection(FB.path("fixed")).get(), 20000).then(function(q){
+    var a = []; q.forEach(function(d){ var v = d.data(); a.push({name:v.name, a:v.a, since:v.since, until:v.until || ""}); }); return a;
+  }) : Promise.resolve([]);
+  return Promise.all([pe, pf]).then(function(r){ return {exp:r[0], fixed:r[1]}; }, function(){ return null; });
+}
+function prow(k, v){ var r = h("div", "prow"); r.appendChild(h("span", "", k)); r.appendChild(h("b", "", v)); return r; }
+function renderProfit(S, w){
+  var X = ctx.extra; if (!X || (w.mode !== "m" && w.mode !== "y")) return null;
+  var buy = 0; X.exp.forEach(function(x){ buy += x.a; });
+  var nowM = ymOf(TODAY), y = w.from.getFullYear(), fx = 0, mi;
+  if (w.mode === "m") fx = fixedFor(X.fixed, ymOf(w.from));
+  else for (mi = 1; mi <= 12; mi++){ var k = y + "-" + pad2(mi); if (k <= nowM) fx += fixedFor(X.fixed, k); }
+  var profit = S.total - buy - fx;
+  var wrap = h("div"); wrap.style.cssText = "display:flex;flex-direction:column;gap:18px";
+  var c = h("section", "card"); c.appendChild(h("h2", "", profit < 0 ? "ขาดทุน" : "กำไร"));
+  c.appendChild(h("div", "profit-big num " + (profit < 0 ? "neg" : "pos"), (profit < 0 ? "−" : "") + baht(profit)));
+  c.appendChild(prow("ยอดขาย", baht(S.total)));
+  c.appendChild(prow("ซื้อของ (" + X.exp.length + " รายการ)", "−" + baht(buy)));
+  c.appendChild(prow("ค่าใช้จ่ายรายเดือน", "−" + baht(fx)));
+  c.appendChild(h("div", "sub", (buy || fx) ? "คิดแบบเงินเข้า-ออก ซื้อของวันไหนหักวันนั้น" : "ยังไม่ได้ลงรายจ่าย กดปุ่มใบเสร็จมุมบนเพื่อเพิ่ม")).style.marginTop = "8px";
+  wrap.appendChild(c);
+  if (w.mode === "y"){
+    var bym = {}; X.exp.forEach(function(x){ var q = x.day.slice(0, 7); bym[q] = (bym[q] || 0) + x.a; });
+    var cm = h("section", "card"); cm.appendChild(h("h2", "", "กำไรแต่ละเดือน"));
+    var wrapT = h("div", "tbl-wrap"), t = h("table"), th = h("thead"), tr = h("tr");
+    ["เดือน", "ขาย", "รายจ่าย", "กำไร"].forEach(function(x){ tr.appendChild(h("th", "", x)); }); th.appendChild(tr); t.appendChild(th);
+    var tb = h("tbody");
+    ctx.res.days.forEach(function(o){
+      if (o.date > nowM) return;
+      var ex = (bym[o.date] || 0) + fixedFor(X.fixed, o.date), pr = o.total - ex, r = h("tr");
+      r.appendChild(h("td", "", MON_S[+o.date.slice(5, 7) - 1]));
+      r.appendChild(h("td", "", money(o.total))); r.appendChild(h("td", "", money(ex)));
+      r.appendChild(h("td", pr < 0 ? "neg" : "pos", (pr < 0 ? "−" : "") + money(pr)));
+      tb.appendChild(r);
+    });
+    t.appendChild(tb); wrapT.appendChild(t); cm.appendChild(wrapT); wrap.appendChild(cm);
+  }
+  return wrap;
+}
+function renderPurchases(w){
+  var X = ctx.extra; if (!X) return null;
+  var full = w.mode === "m" || w.mode === "y";
+  if (!X.exp.length){
+    if (!full) return null;
+    var e = h("section", "card"); e.appendChild(h("h2", "", "ซื้อของ")); e.appendChild(h("div", "sub", "ยังไม่มีรายการซื้อของในช่วงนี้")); return e;
+  }
+  var total = 0, byCat = {}, byDay = {}, days = [];
+  X.exp.forEach(function(x){
+    total += x.a; var cn = x.cat || "ไม่ระบุหมวด"; byCat[cn] = (byCat[cn] || 0) + x.a;
+    if (!byDay[x.day]){ byDay[x.day] = []; days.push(x.day); } byDay[x.day].push(x);
+  });
+  days.sort(function(a, b){ return a < b ? 1 : -1; });
+  var c = h("section", "card");
+  if (w.mode === "y"){
+    c.appendChild(h("h2", "", "ซื้อของแยกตามหมวด"));
+    c.appendChild(h("div", "sub", "ซื้อของ " + days.length + " วัน รวม " + baht(total)));
+    var cats = Object.keys(byCat).sort(function(a, b){ return byCat[b] - byCat[a]; }), max = byCat[cats[0]], hb = h("div", "hbars");
+    cats.forEach(function(k){
+      var r = h("div", "hrow s"), t = h("div", "t"), i = h("i"); i.style.width = (byCat[k] / max * 100) + "%"; t.appendChild(i);
+      r.appendChild(h("span", "l", k)); r.appendChild(t); r.appendChild(h("span", "v num", baht(byCat[k]))); hb.appendChild(r);
+    });
+    c.appendChild(hb); return c;
+  }
+  c.appendChild(h("h2", "", "ซื้อของ"));
+  var tt = h("div", "pu-total"); tt.appendChild(h("span", "", X.exp.length + " รายการ · " + days.length + " วัน")); tt.appendChild(h("b", "num", baht(total))); c.appendChild(tt);
+  var catTxt = Object.keys(byCat).sort(function(a, b){ return byCat[b] - byCat[a]; }).map(function(k){ return k + " " + baht(byCat[k]); }).join(" · ");
+  if (catTxt) c.appendChild(h("div", "sub", catTxt));
+  days.forEach(function(d){
+    var list = byDay[d], sum = 0; list.forEach(function(x){ sum += x.a; });
+    var r = h("div", "pu"); r.appendChild(h("span", "dd", fmtDay(parse(d))));
+    var names = []; list.forEach(function(x){ if (names.indexOf(x.name) < 0) names.push(x.name); });
+    r.appendChild(h("span", "nn", w.mode === "d" ? "" : names.join(", "))); r.appendChild(h("span", "aa", baht(sum)));
+    c.appendChild(r);
+    if (w.mode === "d") list.forEach(function(x){ var q = h("div", "pu sub"); q.appendChild(h("span", "nn", x.name + (x.cat ? " · " + x.cat : ""))); q.appendChild(h("span", "aa", baht(x.a))); c.appendChild(q); });
+  });
+  return c;
+}
+
 /* ================= loading ================= */
 var reqId = 0;
 function refresh(){
   var my = ++reqId, w = windowInfo();
   syncControls(w);
   $("stage").classList.add("loading"); $("refreshBtn").classList.add("spin");
-  var key = "r3|" + FB.ctx.shopId + "|" + w.gran + "|" + ymd(w.from) + "|" + ymd(w.to);
+  var key = "r4|" + FB.ctx.shopId + "|" + w.gran + "|" + ymd(w.from) + "|" + ymd(w.to);
   var done = function(){ if (my !== reqId) return false; $("stage").classList.remove("loading"); $("refreshBtn").classList.remove("spin"); return true; };
-  Promise.all([getRange(w.from, w.to, w.gran), w.pfrom ? getRange(w.pfrom, w.pto, w.gran).catch(function(){ return null; }) : Promise.resolve(null)]).then(function(r){
+  Promise.all([getRange(w.from, w.to, w.gran), w.pfrom ? getRange(w.pfrom, w.pto, w.gran).catch(function(){ return null; }) : Promise.resolve(null), getExtra(w)]).then(function(r){
     if (!done()) return;
-    if (!r[0].demo) cachePut(key, {t: Date.now(), cur: r[0], prev: r[1]});
+    if (!r[0].demo) cachePut(key, {t: Date.now(), cur: r[0], prev: r[1], extra: r[2]});
     $("updated").textContent = r[0].demo ? "ข้อมูลตัวอย่าง" : "อัปเดต " + timeStr(Date.now());
-    paint(r[0], r[1], w);
+    paint(r[0], r[1], w, null, r[2]);
   }, function(e){
     if (!done()) return;
     var c = cacheGet(key);
-    if (c){ $("updated").textContent = "ออฟไลน์"; paint(c.cur, c.prev, w, {stale: c.t}); return; }
+    if (c){ $("updated").textContent = "ออฟไลน์"; paint(c.cur, c.prev, w, {stale: c.t}, c.extra); return; }
     showError(e, w);
   });
 }
@@ -1197,6 +1364,175 @@ $("openSettings").addEventListener("click", function(){ if (FB.ctx) openSheet();
 $("setClose").addEventListener("click", closeSheet); $("setDone").addEventListener("click", closeSheet); $("scrim").addEventListener("click", closeSheet);
 document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeSheet(); });
 
+/* ================= expense sheet ================= */
+var DEF_CATS = ["วัตถุดิบ", "บรรจุภัณฑ์", "อุปกรณ์", "อื่นๆ"];
+var expOpen = false, expChanged = false, eReq = 0, eData = [], eEdit = null, eCat = DEF_CATS[0], eNew = false, fData = [];
+var eMonth = mk(TODAY.getFullYear(), TODAY.getMonth(), 1);
+function eHint(t, ok){ var e = $("eHint"); e.textContent = t; e.className = "hint" + (ok ? " ok" : t ? " bad" : ""); }
+function fHint(t, ok){ var e = $("fHint"); e.textContent = t; e.className = "hint" + (ok ? " ok" : t ? " bad" : ""); }
+function newId(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function catList(){ var a = DEF_CATS.slice(); eData.forEach(function(x){ if (x.cat && a.indexOf(x.cat) < 0) a.push(x.cat); }); return a; }
+function renderCats(){
+  var box = $("eCats"); box.textContent = "";
+  catList().forEach(function(c){
+    var b = h("button", "chip", c); b.type = "button"; b.setAttribute("aria-pressed", String(!eNew && c === eCat));
+    b.addEventListener("click", function(){ eNew = false; eCat = c; $("eCatNew").hidden = true; renderCats(); }); box.appendChild(b);
+  });
+  var nb = h("button", "chip", "+ หมวดใหม่"); nb.type = "button"; nb.setAttribute("aria-pressed", String(eNew));
+  nb.addEventListener("click", function(){ eNew = true; $("eCatNew").hidden = false; $("eCatNew").focus(); renderCats(); }); box.appendChild(nb);
+}
+function renderNames(){
+  var dl = $("eNames"), seen = {}; dl.textContent = "";
+  eData.forEach(function(x){ if (!seen[x.name] && Object.keys(seen).length < 80){ seen[x.name] = 1; var o = document.createElement("option"); o.value = x.name; dl.appendChild(o); } });
+}
+function monthOpts(sel){
+  sel.textContent = "";
+  for (var i = 0; i < 12; i++){
+    var d = mk(TODAY.getFullYear(), TODAY.getMonth() - i, 1), o = document.createElement("option");
+    o.value = ymOf(d); o.textContent = (i === 0 ? "เดือนนี้ · " : "") + MONTHS[d.getMonth()] + " " + (d.getFullYear() + 543); sel.appendChild(o);
+  }
+}
+function resetEForm(){
+  eEdit = null; $("eName").value = ""; $("eAmt").value = ""; $("eCancel").hidden = true; $("eSave").textContent = "บันทึกซื้อของ"; $("eFormK").textContent = "เพิ่มรายการซื้อของ";
+}
+function loadExp(){
+  var a = mk(eMonth.getFullYear(), eMonth.getMonth() - 1, 1), z = mk(eMonth.getFullYear(), eMonth.getMonth() + 1, 0), my = ++eReq;
+  $("eMonth").textContent = MONTHS[eMonth.getMonth()] + " " + (eMonth.getFullYear() + 543);
+  $("eNext").disabled = ymOf(eMonth) >= ymOf(TODAY);
+  $("eList").textContent = "กำลังโหลด…";
+  FB.withTimeout(FB.db.collection(FB.path("exp")).where("day", ">=", ymd(a)).where("day", "<=", ymd(z)).get(), 20000).then(function(q){
+    if (my !== eReq) return;
+    eData = []; q.forEach(function(d){ var v = d.data(); eData.push({id:d.id, t:v.t, day:v.day, a:v.a, name:v.name, cat:v.cat || ""}); });
+    renderCats(); renderNames(); renderEList();
+  }, function(e){ if (my === eReq) $("eList").textContent = FB.errMsg(e); });
+}
+function renderEList(){
+  var box = $("eList"), mk_ = ymOf(eMonth); box.textContent = "";
+  var rows = eData.filter(function(x){ return x.day.slice(0, 7) === mk_; });
+  if (!rows.length){ box.appendChild(h("div", "hint", "ยังไม่มีรายการซื้อของเดือนนี้")); return; }
+  var total = 0, byDay = {}, days = [];
+  rows.forEach(function(x){ total += x.a; if (!byDay[x.day]){ byDay[x.day] = []; days.push(x.day); } byDay[x.day].push(x); });
+  days.sort(function(a, b){ return a < b ? 1 : -1; });
+  var tt = h("div", "pu-total"); tt.appendChild(h("span", "", "รวมเดือนนี้ " + rows.length + " รายการ")); tt.appendChild(h("b", "num", baht(total))); box.appendChild(tt);
+  days.forEach(function(d){
+    var list = byDay[d].sort(function(a, b){ return b.t - a.t; }), sum = 0; list.forEach(function(x){ sum += x.a; });
+    var hr = h("div", "pu"); hr.appendChild(h("span", "dd", fmtDay(parse(d)))); hr.appendChild(h("span", "nn", "")); hr.appendChild(h("span", "aa", baht(sum))); box.appendChild(hr);
+    list.forEach(function(x){
+      var r = h("div", "pu sub"); r.appendChild(h("span", "nn", x.name + (x.cat ? " · " + x.cat : ""))); r.appendChild(h("span", "aa", baht(x.a)));
+      var ed = h("button", "mini", "แก้"); ed.type = "button";
+      ed.addEventListener("click", function(){
+        eEdit = x; $("eDate").value = x.day; $("eName").value = x.name; $("eAmt").value = (x.a / 100).toFixed(2);
+        eNew = false; eCat = x.cat || DEF_CATS[3]; $("eCatNew").hidden = true; renderCats();
+        $("eCancel").hidden = false; $("eSave").textContent = "บันทึกการแก้ไข"; $("eFormK").textContent = "แก้ไขรายการ"; eHint("");
+        $("eFormK").scrollIntoView({block: "start"});
+      });
+      var dl = h("button", "mini danger", "ลบ"); dl.type = "button";
+      dl.addEventListener("click", function(){
+        if (!dl.dataset.arm){ dl.dataset.arm = "1"; dl.textContent = "ยืนยัน"; setTimeout(function(){ delete dl.dataset.arm; dl.textContent = "ลบ"; }, 2500); return; }
+        dl.disabled = true;
+        FB.withTimeout(FB.db.doc(FB.path("exp/" + x.id)).delete(), 15000).then(function(){ expChanged = true; if (eEdit && eEdit.id === x.id) resetEForm(); loadExp(); }, function(e){ dl.disabled = false; dl.textContent = FB.errMsg(e); });
+      });
+      r.appendChild(ed); r.appendChild(dl); box.appendChild(r);
+    });
+  });
+}
+$("eSave").addEventListener("click", function(){
+  var ds = $("eDate").value, nm = $("eName").value.trim(), amt = Math.round(parseFloat($("eAmt").value) * 100), cat = (eNew ? $("eCatNew").value.trim() : eCat), btn = this, p = ds.split("-");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)){ eHint("เลือกวันที่ซื้อ"); return; }
+  if (!nm){ eHint("ใส่ชื่อรายการที่ซื้อ"); return; }
+  if (!isFinite(amt) || amt <= 0){ eHint("ใส่จำนวนเงินเป็นตัวเลขมากกว่า 0"); return; }
+  if (!cat){ eHint("ใส่ชื่อหมวดใหม่ หรือเลือกหมวดที่มีอยู่"); return; }
+  var data = {t: mk(+p[0], +p[1] - 1, +p[2]).getTime(), day: ds, a: amt, name: nm.slice(0, 60), cat: cat.slice(0, 20)};
+  var ref = FB.db.doc(FB.path("exp/" + (eEdit ? eEdit.id : newId("e"))));
+  btn.disabled = true; eHint("กำลังบันทึก…", true);
+  FB.withTimeout(eEdit ? ref.update(data) : ref.set(data), 15000).then(function(){
+    expChanged = true; eHint((eEdit ? "แก้ไขแล้ว " : "บันทึกแล้ว ") + nm + " " + baht(amt), true);
+    eNew = false; eCat = data.cat; $("eCatNew").hidden = true; $("eCatNew").value = ""; resetEForm();
+    eMonth = mk(+p[0], +p[1] - 1, 1); loadExp();
+  }, function(e){ eHint(FB.errMsg(e)); }).then(function(){ btn.disabled = false; });
+});
+$("eCancel").addEventListener("click", function(){ resetEForm(); eHint(""); });
+$("ePrev").addEventListener("click", function(){ eMonth = mk(eMonth.getFullYear(), eMonth.getMonth() - 1, 1); loadExp(); });
+$("eNext").addEventListener("click", function(){ if (ymOf(eMonth) < ymOf(TODAY)){ eMonth = mk(eMonth.getFullYear(), eMonth.getMonth() + 1, 1); loadExp(); } });
+
+/* fixed monthly costs */
+function loadFixed(){
+  $("fList").textContent = "กำลังโหลด…";
+  FB.withTimeout(FB.db.collection(FB.path("fixed")).get(), 20000).then(function(q){
+    fData = []; q.forEach(function(d){ var v = d.data(); fData.push({id:d.id, name:v.name, a:v.a, since:v.since, until:v.until || ""}); }); renderFixed();
+  }, function(e){ $("fList").textContent = FB.errMsg(e); });
+}
+function ymLabel(m){ return MON_S[+m.slice(5, 7) - 1] + " " + (+m.slice(0, 4) + 543); }
+function renderFixed(){
+  var box = $("fList"), nowM = ymOf(TODAY); box.textContent = "";
+  var act = fData.filter(function(f){ return f.since <= nowM && (!f.until || f.until >= nowM); }).sort(function(a, b){ return a.name < b.name ? -1 : 1; });
+  if (!act.length){ box.appendChild(h("div", "hint", "ยังไม่มีรายการ เพิ่มด้านล่าง")); return; }
+  var total = 0; act.forEach(function(f){ total += f.a; });
+  var tt = h("div", "pu-total"); tt.appendChild(h("span", "", "รวมต่อเดือน")); tt.appendChild(h("b", "num", baht(total))); box.appendChild(tt);
+  act.forEach(function(f){
+    var row = h("div", "mem"), nm = h("div", "nm"); nm.appendChild(document.createTextNode(f.name));
+    nm.appendChild(h("small", "", baht(f.a) + " ต่อเดือน · ตั้งแต่ " + ymLabel(f.since))); row.appendChild(nm);
+    var eb = h("button", "mini", "แก้ราคา"); eb.type = "button";
+    var xb = h("button", "mini danger", "เลิกใช้"); xb.type = "button";
+    row.appendChild(eb); row.appendChild(xb); box.appendChild(row);
+    xb.addEventListener("click", function(){
+      if (!xb.dataset.arm){ xb.dataset.arm = "1"; xb.textContent = "ยืนยัน"; setTimeout(function(){ delete xb.dataset.arm; xb.textContent = "เลิกใช้"; }, 2500); return; }
+      xb.disabled = true; var end = prevYm(nowM), ref = FB.db.doc(FB.path("fixed/" + f.id));
+      FB.withTimeout(end < f.since ? ref.delete() : ref.update({until: end}), 15000).then(function(){ expChanged = true; loadFixed(); }, function(e){ xb.disabled = false; xb.textContent = FB.errMsg(e); });
+    });
+    eb.addEventListener("click", function(){
+      if (row.nextSibling && row.nextSibling.className === "fedit"){ box.removeChild(row.nextSibling); return; }
+      var ed = h("div", "fedit"), ai = document.createElement("input"), sl = document.createElement("select"), ok = h("button", "mini", "บันทึกราคาใหม่"), msg = h("div", "hint");
+      ai.className = "text-in"; ai.type = "number"; ai.step = "0.01"; ai.min = "0"; ai.setAttribute("inputmode", "decimal"); ai.placeholder = "ราคาใหม่ (บาทต่อเดือน)"; ai.setAttribute("aria-label", "ราคาใหม่");
+      sl.className = "text-in"; sl.setAttribute("aria-label", "ใช้ราคาใหม่ตั้งแต่เดือน"); monthOpts(sl);
+      ok.type = "button"; ed.appendChild(ai); ed.appendChild(h("div", "group-k", "ใช้ราคาใหม่ตั้งแต่เดือน")); ed.appendChild(sl); ed.appendChild(msg); ed.appendChild(ok);
+      row.parentNode.insertBefore(ed, row.nextSibling);
+      ok.addEventListener("click", function(){
+        var amt = Math.round(parseFloat(ai.value) * 100), from = sl.value;
+        if (!isFinite(amt) || amt <= 0){ msg.textContent = "ใส่ราคาใหม่เป็นตัวเลขมากกว่า 0"; msg.className = "hint bad"; return; }
+        var b = FB.db.batch(), ref = FB.db.doc(FB.path("fixed/" + f.id));
+        if (from <= f.since) b.update(ref, {a: amt});
+        else { b.update(ref, {until: prevYm(from)}); b.set(FB.db.doc(FB.path("fixed/" + newId("f"))), {name: f.name, a: amt, since: from, until: ""}); }
+        ok.disabled = true; msg.textContent = "กำลังบันทึก…"; msg.className = "hint ok";
+        FB.withTimeout(b.commit(), 15000).then(function(){ expChanged = true; loadFixed(); }, function(e){ ok.disabled = false; msg.textContent = FB.errMsg(e); msg.className = "hint bad"; });
+      });
+    });
+  });
+}
+$("fAdd").addEventListener("click", function(){
+  var nm = $("fName").value.trim(), amt = Math.round(parseFloat($("fAmt").value) * 100), from = $("fFrom").value, btn = this;
+  if (!nm){ fHint("ใส่ชื่อค่าใช้จ่าย"); return; }
+  if (!isFinite(amt) || amt <= 0){ fHint("ใส่จำนวนเงินเป็นตัวเลขมากกว่า 0"); return; }
+  btn.disabled = true; fHint("กำลังบันทึก…", true);
+  FB.withTimeout(FB.db.doc(FB.path("fixed/" + newId("f"))).set({name: nm.slice(0, 40), a: amt, since: from, until: ""}), 15000).then(function(){
+    expChanged = true; $("fName").value = ""; $("fAmt").value = ""; fHint("เพิ่มแล้ว " + nm + " " + baht(amt) + " ต่อเดือน", true); loadFixed();
+  }, function(e){ fHint(FB.errMsg(e)); }).then(function(){ btn.disabled = false; });
+});
+
+function showTab(t){
+  document.querySelectorAll("[data-etab]").forEach(function(b){ b.setAttribute("aria-pressed", String(b.dataset.etab === t)); });
+  $("etPill").style.transform = "translateX(calc(" + (t === "fix" ? 1 : 0) + " * (100% + 4px)))";
+  $("pBuy").style.display = t === "buy" ? "flex" : "none"; $("pFix").style.display = t === "fix" ? "flex" : "none";
+}
+document.querySelectorAll("[data-etab]").forEach(function(b){ b.addEventListener("click", function(){ showTab(b.dataset.etab); }); });
+function openExp(){
+  if (expOpen) return; expOpen = true; expChanged = false;
+  eMonth = mk(TODAY.getFullYear(), TODAY.getMonth(), 1); eNew = false; eCat = DEF_CATS[0]; eData = [];
+  resetEForm(); eHint(""); fHint(""); $("eDate").value = ymd(now()); $("eCatNew").hidden = true; $("eCatNew").value = "";
+  monthOpts($("fFrom")); showTab("buy"); renderCats(); loadExp(); loadFixed();
+  $("scrim").hidden = false; $("expSheet").hidden = false;
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ $("scrim").classList.add("show"); $("expSheet").classList.add("show"); showTab("buy"); }); });
+}
+function closeExp(){
+  if (!expOpen) return; expOpen = false;
+  $("scrim").classList.remove("show"); $("expSheet").classList.remove("show");
+  setTimeout(function(){ if (!expOpen && !isOpen){ $("scrim").hidden = true; } if (!expOpen) $("expSheet").hidden = true; }, 380);
+  if (expChanged) refresh();
+}
+$("openExp").addEventListener("click", function(){ if (FB.ctx) openExp(); });
+$("expClose").addEventListener("click", closeExp); $("expDone").addEventListener("click", closeExp); $("scrim").addEventListener("click", closeExp);
+document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeExp(); });
+
 /* ================= theme ================= */
 var mql = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 function applyTheme(){
@@ -1249,7 +1585,7 @@ function makeIcon(size){
 
 /* ================= boot ================= */
 document.addEventListener("visibilitychange", function(){
-  if (document.hidden || isOpen || !FB.ctx) return;
+  if (document.hidden || isOpen || expOpen || !FB.ctx) return;
   var n = now(); if (ymd(n) !== ymd(TODAY)){ var w0 = windowInfo(), wasNow = w0.from <= TODAY && TODAY <= w0.to; TODAY = n; if (wasNow) anchor = n; }
   refresh();
 });
