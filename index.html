@@ -174,6 +174,7 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
 
 /* Settings */
 .group{display:flex;flex-direction:column;gap:8px}
+.acct{font-size:15px;line-height:1.7;padding:0 4px;word-break:break-all}.acct span{color:var(--muted);font-size:14px}
 .group-k{font-size:13px;color:var(--muted);padding:0 4px;font-weight:500}
 .text-in{width:100%;height:56px;border-radius:16px;border:1px solid var(--line);background:var(--surface-2);padding:0 16px;
   font-family:var(--font-num);font-size:20px;font-weight:600;letter-spacing:.02em;font-variant-numeric:tabular-nums;outline:none;transition:border-color .15s,box-shadow .15s}
@@ -326,11 +327,10 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
       <span class="chip">ไทยช่วยไทย <b id="splitThai">฿0.00</b></span>
     </div>
     <div class="all" id="allCard" hidden>
-      <div class="all-top"><span class="all-k">ทุกเครื่อง (Google Sheet)</span><span class="all-v num" id="allTotal"></span></div>
+      <div class="all-top"><span class="all-k">ยอดรวมทั้งร้าน</span><span class="all-v num" id="allTotal"></span></div>
       <div class="all-split num" id="allSplit"></div>
       <ul class="all-list num" id="allList"></ul>
       <div class="all-msg" id="allMsg" hidden></div>
-      <a class="ext" id="sheetLink" href="#" target="_blank" rel="noopener" hidden>เปิด Google Sheet ↗</a>
     </div>
     <div class="list-head"><span id="listHeadK">ประวัติรายการ</span><span id="avgLabel" class="num"></span></div>
     <ul class="tx-list" id="txList"></ul>
@@ -348,23 +348,14 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
   </div>
   <div class="sheet-body">
     <div class="group">
-      <label class="group-k" for="seller">ชื่อคนขาย / ชื่อเครื่องนี้</label>
-      <input class="text-in sm" id="seller" type="text" autocomplete="off" maxlength="30" placeholder="เช่น แอน, หน้าร้าน">
+      <div class="group-k">บัญชี</div>
+      <div class="acct" id="acct"></div>
+      <div class="mini-row"><button class="mini" id="signOut" type="button">ออกจากระบบ</button></div>
     </div>
     <div class="group">
       <label class="group-k" for="ppId">เบอร์พร้อมเพย์ที่รับเงิน</label>
       <input class="text-in" id="ppId" type="text" inputmode="numeric" autocomplete="off" placeholder="08x-xxx-xxxx" maxlength="22">
       <div class="hint" id="ppHint">เบอร์มือถือ 10 หลัก หรือเลขบัตรประชาชน / เลขผู้เสียภาษี 13 หลัก</div>
-    </div>
-    <div class="group">
-      <label class="group-k" for="sheetIn">รวมยอดทุกเครื่องใน Google Sheet</label>
-      <input class="text-in sm" id="sheetIn" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false"
-        placeholder="วางลิงก์ Web app หรือรหัสตั้งค่า">
-      <div class="hint" id="sheetHint">ไม่บังคับ ถ้าไม่ใส่ ยอดจะเก็บไว้ในเครื่องนี้อย่างเดียว</div>
-      <div class="mini-row">
-        <button class="mini" id="sheetTest" type="button">ทดสอบการเชื่อมต่อ</button>
-        <button class="mini accent" id="copyCode" type="button">คัดลอกรหัสตั้งค่าให้เครื่องอื่น</button>
-      </div>
     </div>
     <div class="group">
       <div class="group-k" id="themeK">ธีม</div>
@@ -393,13 +384,309 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
 
 <div class="toast" id="toast" role="status" aria-live="polite"><span class="ok"><svg><use href="#i-check"/></svg></span><span id="toastText"></span><button id="toastUndo">เลิกทำ</button></div>
 
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>/* ===== QR-Pay · Firebase module (shared by cashier + owner pages) ===== */
+(function(){
+"use strict";
+var CFG = {
+  apiKey: "AIzaSyD7DtJDj_jAE2QX52uCTppWAMeikkBWiE4",
+  authDomain: "qr-pay-e2f04.firebaseapp.com",
+  projectId: "qr-pay-e2f04",
+  storageBucket: "qr-pay-e2f04.firebasestorage.app",
+  messagingSenderId: "487440696047",
+  appId: "1:487440696047:web:ce86edb6e03966fbe3d11a"
+};
+var CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+var auth = null, db = null, need = "seller", onReady = null, started = false;
+var FB = window.FB = {ctx:null, db:null, auth:null, offlineCtx:false};
+
+function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
+function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function lsDel(k){ try{ localStorage.removeItem(k); }catch(e){} }
+function $(id){ return document.getElementById(id); }
+function withTimeout(p, ms){
+  return new Promise(function(res, rej){
+    var t = setTimeout(function(){ var e = new Error("timeout"); e.code = "timeout"; rej(e); }, ms);
+    p.then(function(v){ clearTimeout(t); res(v); }, function(e){ clearTimeout(t); rej(e); });
+  });
+}
+function isNet(e){ var c = e && e.code || ""; return c === "timeout" || c === "unavailable" || c === "auth/network-request-failed" || c === "failed-precondition" && /offline/i.test(e.message || ""); }
+function errMsg(e){
+  var c = e && e.code || "", m = {
+    "auth/invalid-email":"อีเมลไม่ถูกต้อง",
+    "auth/missing-email":"กรุณาใส่อีเมล",
+    "auth/missing-password":"กรุณาใส่รหัสผ่าน",
+    "auth/user-not-found":"อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+    "auth/wrong-password":"อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+    "auth/invalid-credential":"อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+    "auth/invalid-login-credentials":"อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+    "auth/email-already-in-use":"อีเมลนี้สมัครไว้แล้ว ลองเข้าสู่ระบบแทน",
+    "auth/weak-password":"รหัสผ่านสั้นเกินไป ต้องมีอย่างน้อย 6 ตัวอักษร",
+    "auth/too-many-requests":"ลองหลายครั้งเกินไป รอสักครู่แล้วลองใหม่",
+    "auth/network-request-failed":"เชื่อมต่ออินเทอร์เน็ตไม่ได้",
+    "auth/operation-not-allowed":"ยังไม่ได้เปิดล็อกอินแบบอีเมลในคอนโซล Firebase",
+    "auth/unauthorized-domain":"โดเมนนี้ยังไม่ได้เพิ่มใน Authorized domains ของ Firebase",
+    "permission-denied":"ไม่มีสิทธิ์ทำรายการนี้",
+    "timeout":"เครือข่ายช้าหรือไม่มีสัญญาณ ลองใหม่อีกครั้ง",
+    "unavailable":"เชื่อมต่อเซิร์ฟเวอร์ไม่ได้"
+  };
+  return m[c] || ("เกิดข้อผิดพลาด" + (c ? " (" + c + ")" : ""));
+}
+
+/* ---------- gate UI ---------- */
+var CSS = ".fbg{position:fixed;top:0;left:0;right:0;bottom:0;z-index:100;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--bg,#f6f8f7);color:var(--fg,#0f1a15);font-family:inherit;padding:max(24px,env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px))}" +
+".fbg *{box-sizing:border-box}.fbg-in{max-width:400px;margin:0 auto;display:flex;flex-direction:column;gap:14px}" +
+".fbg h1{font-size:26px;margin:22px 0 0;letter-spacing:-.01em}.fbg p{margin:0;color:var(--muted,#5b6b63);font-size:15px;line-height:1.5}" +
+".fbg .tabs{display:flex;background:var(--surface-2,#eaf0ed);border-radius:14px;padding:4px;gap:4px}" +
+".fbg .tabs button{flex:1;height:42px;border-radius:11px;font:inherit;font-weight:600;font-size:15px;color:var(--muted,#5b6b63);background:transparent;border:0}" +
+".fbg .tabs button.on{background:var(--surface,#fff);color:var(--fg,#0f1a15);box-shadow:0 1px 3px rgba(0,0,0,.12)}" +
+".fbg label{font-size:13px;color:var(--muted,#5b6b63);display:block;margin-bottom:6px}" +
+".fbg input{width:100%;height:50px;border-radius:14px;border:1px solid var(--line,#d5dfda);background:var(--surface,#fff);color:inherit;font:inherit;font-size:17px;padding:0 14px;outline:0}" +
+".fbg input:focus{border-color:var(--accent,#059669);box-shadow:0 0 0 3px rgba(5,150,105,.18)}" +
+".fbg .go{height:54px;border-radius:16px;border:0;background:var(--accent,#059669);color:var(--on-accent,#fff);font:inherit;font-size:18px;font-weight:650}" +
+".fbg .go:disabled{opacity:.5}.fbg .ghost{height:46px;border:0;background:transparent;color:var(--accent,#059669);font:inherit;font-size:15px;font-weight:600}" +
+".fbg .msg{min-height:20px;font-size:14px;color:var(--danger,#dc2626)}.fbg .msg.ok{color:var(--accent,#059669)}" +
+".fbg .who{font-size:14px;color:var(--muted,#5b6b63)}";
+function injectCss(){ if ($("fbCss")) return; var s = document.createElement("style"); s.id = "fbCss"; s.textContent = CSS; document.head.appendChild(s); }
+function gate(html){
+  injectCss();
+  var g = $("fbGate");
+  if (!g){ g = document.createElement("div"); g.id = "fbGate"; g.className = "fbg"; document.body.appendChild(g); }
+  g.innerHTML = '<div class="fbg-in">' + html + '</div>'; g.hidden = false; return g;
+}
+function hideGate(){ var g = $("fbGate"); if (g) g.hidden = true; }
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function setMsg(t, ok){ var m = $("fbMsg"); if (m){ m.textContent = t || ""; m.className = "msg" + (ok ? " ok" : ""); } }
+
+function viewLoading(t){ gate('<h1>QR รับเงิน</h1><p>' + esc(t || "กำลังโหลด…") + '</p>'); }
+function viewError(t, retry){
+  var g = gate('<h1>QR รับเงิน</h1><p>' + esc(t) + '</p><button class="go" id="fbRetry">ลองใหม่</button>');
+  $("fbRetry").onclick = retry || function(){ location.reload(); };
+}
+
+function viewAuth(mode){
+  mode = mode || "login";
+  var su = mode === "signup";
+  gate('<h1>QR รับเงิน</h1><p>' + (su ? "สมัครบัญชีเพื่อเริ่มใช้งาน" : "เข้าสู่ระบบเพื่อใช้งาน") + '</p>' +
+    '<div class="tabs"><button id="fbTL" class="' + (su ? "" : "on") + '">เข้าสู่ระบบ</button><button id="fbTS" class="' + (su ? "on" : "") + '">สมัครใช้งาน</button></div>' +
+    (su ? '<div><label for="fbName">ชื่อของคุณ (แสดงในรายการขาย)</label><input id="fbName" type="text" maxlength="30" autocomplete="name" placeholder="เช่น แอน"></div>' : '') +
+    '<div><label for="fbEmail">อีเมล</label><input id="fbEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false"></div>' +
+    '<div><label for="fbPw">รหัสผ่าน' + (su ? " (อย่างน้อย 6 ตัว)" : "") + '</label><input id="fbPw" type="password" autocomplete="' + (su ? "new-password" : "current-password") + '"></div>' +
+    '<div class="msg" id="fbMsg" role="alert"></div>' +
+    '<button class="go" id="fbGo">' + (su ? "สมัครใช้งาน" : "เข้าสู่ระบบ") + '</button>' +
+    (su ? '' : '<button class="ghost" id="fbForgot">ลืมรหัสผ่าน</button>'));
+  $("fbTL").onclick = function(){ viewAuth("login"); };
+  $("fbTS").onclick = function(){ viewAuth("signup"); };
+  var go = $("fbGo");
+  function submit(){
+    var email = $("fbEmail").value.trim(), pw = $("fbPw").value, name = su ? $("fbName").value.trim() : "";
+    if (su && !name){ setMsg("กรุณาใส่ชื่อของคุณ"); return; }
+    if (!email || !pw){ setMsg("กรุณาใส่อีเมลและรหัสผ่าน"); return; }
+    go.disabled = true; setMsg("กำลังดำเนินการ…", true);
+    var p = su
+      ? auth.createUserWithEmailAndPassword(email, pw).then(function(cr){ lsSet("q2.pname", name); return cr.user.updateProfile({displayName:name}).catch(function(){}); })
+      : auth.signInWithEmailAndPassword(email, pw);
+    p.catch(function(e){ go.disabled = false; setMsg(errMsg(e)); });   // success -> onAuthStateChanged
+  }
+  go.onclick = submit;
+  ["fbEmail","fbPw","fbName"].forEach(function(id){ var el = $(id); if (el) el.addEventListener("keydown", function(e){ if (e.key === "Enter") submit(); }); });
+  var f = $("fbForgot");
+  if (f) f.onclick = function(){
+    var email = $("fbEmail").value.trim(); if (!email){ setMsg("ใส่อีเมลก่อน แล้วกด ลืมรหัสผ่าน อีกครั้ง"); return; }
+    auth.sendPasswordResetEmail(email).then(function(){ setMsg("ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลแล้ว (ดูในกล่องจดหมายขยะด้วย)", true); }, function(e){ setMsg(errMsg(e)); });
+  };
+}
+
+function viewOnboard(user, note, mode){
+  mode = mode || "join";
+  var jn = mode === "join";
+  var name = user.displayName || lsGet("q2.pname") || "";
+  gate('<h1>เริ่มต้นใช้งาน</h1><p class="who">' + esc(user.email || "") + ' · <a href="#" id="fbOut" style="color:inherit">ออกจากระบบ</a></p>' +
+    (note ? '<p style="color:var(--danger,#dc2626)">' + esc(note) + '</p>' : '') +
+    '<div class="tabs"><button id="fbTJ" class="' + (jn ? "on" : "") + '">ฉันเป็นพนักงาน</button><button id="fbTC" class="' + (jn ? "" : "on") + '">ฉันเป็นเจ้าของร้าน</button></div>' +
+    '<div><label for="fbName">ชื่อของคุณ</label><input id="fbName" type="text" maxlength="30" value="' + esc(name) + '" placeholder="เช่น แอน"></div>' +
+    (jn
+      ? '<div><label for="fbCode">รหัสร้าน (ขอจากเจ้าของร้าน)</label><input id="fbCode" type="text" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="เช่น K7M2QX" style="text-transform:uppercase;letter-spacing:.12em"></div>'
+      : '<div><label for="fbShop">ชื่อร้าน</label><input id="fbShop" type="text" maxlength="60" placeholder="เช่น ร้านป้านิด"></div><p>ระบบจะสร้างรหัสร้านให้ ใช้ส่งให้พนักงานเพื่อเข้าร่วมร้าน</p>') +
+    '<div class="msg" id="fbMsg" role="alert"></div>' +
+    '<button class="go" id="fbGo">' + (jn ? "เข้าร่วมร้าน" : "สร้างร้าน") + '</button>');
+  $("fbOut").onclick = function(e){ e.preventDefault(); FB.signOut(); };
+  $("fbTJ").onclick = function(){ viewOnboard(user, "", "join"); };
+  $("fbTC").onclick = function(){ viewOnboard(user, "", "create"); };
+  var go = $("fbGo");
+  go.onclick = function(){
+    var nm = $("fbName").value.trim();
+    if (!nm){ setMsg("กรุณาใส่ชื่อของคุณ"); return; }
+    go.disabled = true; setMsg("กำลังดำเนินการ…", true);
+    var p = jn ? joinShop(user, nm, $("fbCode").value) : createShop(user, nm, $("fbShop").value);
+    p.then(function(){ lsDel("q2.pname"); resolve(user); }, function(e){ go.disabled = false; setMsg(e && e.say || errMsg(e)); });
+  };
+}
+
+function viewDenied(user){
+  gate('<h1>หน้านี้สำหรับเจ้าของร้าน</h1><p>บัญชี ' + esc(user.email || "") + ' ไม่ใช่เจ้าของร้าน ถ้าเป็นพนักงาน ให้ใช้แอปรับเงินแทน</p>' +
+    '<button class="go" id="fbApp">ไปที่แอปรับเงิน</button><button class="ghost" id="fbOut">ออกจากระบบ</button>');
+  $("fbApp").onclick = function(){ location.href = "./"; };
+  $("fbOut").onclick = function(){ FB.signOut(); };
+}
+
+/* ---------- shop setup ---------- */
+function randCode(){
+  var a = new Uint8Array(6), out = "";
+  (window.crypto || window.msCrypto).getRandomValues(a);
+  for (var i = 0; i < 6; i++) out += CHARS.charAt(a[i] % CHARS.length);
+  return out;
+}
+function putPointer(uid, shopId, role){ return db.doc("users/" + uid).set({shopId:shopId, role:role}); }
+
+function createShop(user, name, shopName){
+  shopName = (shopName || "").trim();
+  if (!shopName){ var e = new Error("x"); e.say = "กรุณาใส่ชื่อร้าน"; return Promise.reject(e); }
+  var shopId = db.collection("shops").doc().id, uid = user.uid;
+  return db.doc("shops/" + shopId).set({name:shopName, ownerUid:uid, createdAt:Date.now()})
+    .then(function(){ return db.doc("shops/" + shopId + "/members/" + uid).set({role:"owner", name:name, email:user.email || ""}); })
+    .then(function(){
+      function tryCode(n){
+        var code = randCode();
+        return db.doc("codes/" + code).set({shopId:shopId}).then(function(){ return code; }, function(err){
+          if (n > 0) return tryCode(n - 1); throw err;
+        });
+      }
+      return tryCode(6);
+    })
+    .then(function(code){ return db.doc("shops/" + shopId + "/secrets/join").set({code:code}); })
+    .then(function(){ return putPointer(uid, shopId, "owner"); });
+}
+
+function joinShop(user, name, code){
+  code = (code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length < 6){ var e = new Error("x"); e.say = "กรุณาใส่รหัสร้านให้ครบ"; return Promise.reject(e); }
+  return db.doc("codes/" + code).get().then(function(snap){
+    if (!snap.exists){ var e2 = new Error("x"); e2.say = "ไม่พบรหัสร้านนี้ ตรวจตัวอักษรอีกครั้ง"; throw e2; }
+    var shopId = snap.data().shopId;
+    return db.doc("shops/" + shopId + "/members/" + user.uid).set({role:"seller", name:name, email:user.email || "", code:code})
+      .then(function(){ return putPointer(user.uid, shopId, "seller"); }, function(err){
+        if (err && err.code === "permission-denied"){ var e3 = new Error("x"); e3.say = "รหัสร้านไม่ถูกต้อง หรือถูกเปลี่ยนแล้ว ขอรหัสใหม่จากเจ้าของ"; throw e3; }
+        throw err;
+      });
+  });
+}
+
+/* ---------- resolve user -> shop membership ---------- */
+function done(ctx){
+  FB.ctx = ctx; lsSet("q2.ctx." + ctx.uid, ctx);
+  if (need === "owner" && ctx.role !== "owner"){ viewDenied({email:ctx.email}); return; }
+  hideGate(); if (onReady){ var f = onReady; onReady = null; f(ctx); }
+}
+function resolve(user){
+  viewLoading("กำลังตรวจสอบบัญชี…");
+  var cached = lsGet("q2.ctx." + user.uid);
+  withTimeout(db.doc("users/" + user.uid).get(), 9000).then(function(ps){
+    if (!ps.exists) return viewOnboard(user);
+    var shopId = ps.data().shopId;
+    return withTimeout(db.doc("shops/" + shopId + "/members/" + user.uid).get(), 9000).then(function(ms){
+      if (!ms.exists){
+        lsDel("q2.ctx." + user.uid);
+        return viewOnboard(user, "บัญชีนี้ไม่ได้อยู่ในร้านแล้ว ใส่รหัสร้านใหม่เพื่อเข้าร่วมอีกครั้ง");
+      }
+      var m = ms.data();
+      return withTimeout(db.doc("shops/" + shopId).get(), 9000).then(function(ss){
+        var sd = ss.exists ? ss.data() : {};
+        done({uid:user.uid, email:user.email || "", name:m.name, role:m.role, shopId:shopId, shopName:sd.name || "", promptpay:sd.promptpay || ""});
+      });
+    });
+  }).catch(function(e){
+    if (isNet(e) && cached && cached.uid === user.uid){ FB.offlineCtx = true; done(cached); return; }
+    if (isNet(e)) return viewError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ต้องมีอินเทอร์เน็ตในการเข้าสู่ระบบครั้งแรก", function(){ resolve(user); });
+    viewError(errMsg(e), function(){ resolve(user); });
+  });
+}
+
+/* ---------- public API ---------- */
+FB.start = function(which, cb){
+  if (started) return; started = true; need = which; onReady = cb;
+  viewLoading("กำลังโหลด…");
+  if (!window.firebase || !firebase.initializeApp){
+    return viewError("โหลดระบบล็อกอินไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่ (ต้องออนไลน์ในการเปิดครั้งแรก)");
+  }
+  try{
+    if (!firebase.apps.length) firebase.initializeApp(CFG);
+    auth = FB.auth = firebase.auth(); db = FB.db = firebase.firestore();
+  }catch(e){ return viewError("เริ่มระบบไม่สำเร็จ: " + (e && e.message || e)); }
+  auth.onAuthStateChanged(function(user){
+    if (!user){ FB.ctx = null; viewAuth("login"); return; }
+    if (FB.ctx && FB.ctx.uid === user.uid) return;
+    resolve(user);
+  });
+};
+FB.signOut = function(){
+  var uid = FB.ctx && FB.ctx.uid;
+  (auth ? auth.signOut() : Promise.resolve()).catch(function(){}).then(function(){ if (uid) lsDel("q2.ctx." + uid); location.reload(); });
+};
+FB.errMsg = errMsg;
+FB.isNet = isNet;
+FB.withTimeout = withTimeout;
+FB.path = function(p){ return "shops/" + FB.ctx.shopId + (p ? "/" + p : ""); };
+
+/* cashier writes — doc id = tx id, so retries are idempotent */
+FB.putTx = function(tx){
+  var c = FB.ctx, ref = db.doc(FB.path("tx/" + tx.id));
+  return withTimeout(ref.set({t:tx.t, day:tx.day, a:tx.a, m:tx.m, uid:c.uid, seller:c.name, status:"ok"}), 15000).catch(function(e){
+    // a retry of a write that already landed is an "update" and is denied by the rules -> treat as done
+    if (e && e.code === "permission-denied") return withTimeout(ref.get(), 10000).then(function(s){ if (!s.exists) throw e; });
+    throw e;
+  });
+};
+FB.voidTx = function(id){
+  var ref = db.doc(FB.path("tx/" + id));
+  return withTimeout(ref.update({status:"void"}), 15000).catch(function(e){
+    if (e && e.code === "not-found") return;
+    if (e && e.code === "permission-denied") return withTimeout(ref.get(), 10000).then(function(s){ if (!(s.exists && s.data().status === "void")) throw e; });
+    throw e;
+  });
+};
+
+/* owner tools */
+FB.setPromptpay = function(digits){
+  return db.doc(FB.path("")).get().then(function(s){
+    var d = s.data(); d.promptpay = digits;
+    return db.doc(FB.path("")).update({name:d.name, ownerUid:d.ownerUid, createdAt:d.createdAt, promptpay:digits});
+  }).then(function(){ FB.ctx.promptpay = digits; lsSet("q2.ctx." + FB.ctx.uid, FB.ctx); });
+};
+FB.getCode = function(){ return db.doc(FB.path("secrets/join")).get().then(function(s){ return s.exists ? s.data().code : ""; }); };
+FB.rotateCode = function(){
+  var old = "";
+  return FB.getCode().then(function(c){
+    old = c;
+    function tryCode(n){
+      var code = randCode();
+      return db.doc("codes/" + code).set({shopId:FB.ctx.shopId}).then(function(){ return code; }, function(err){ if (n > 0) return tryCode(n - 1); throw err; });
+    }
+    return tryCode(6);
+  }).then(function(code){
+    return db.doc(FB.path("secrets/join")).set({code:code}).then(function(){
+      if (old) db.doc("codes/" + old).delete().catch(function(){});
+      return code;
+    });
+  });
+};
+FB.members = function(){
+  return db.collection(FB.path("members")).get().then(function(q){
+    var out = []; q.forEach(function(d){ var v = d.data(); out.push({uid:d.id, name:v.name, role:v.role, email:v.email || ""}); }); return out;
+  });
+};
+FB.removeMember = function(uid){ return db.doc(FB.path("members/" + uid)).delete(); };
+})();
+</script>
 <script>/* QR Code Generator for JavaScript — Copyright (c) 2009 Kazuhiko Arase — MIT License */
 var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],f={},c=function(t,r){o=function(t){for(var r=new Array(t),e=0;e<t;e+=1){r[e]=new Array(t);for(var n=0;n<t;n+=1)r[e][n]=null}return r}(i=4*e+17),l(0,0),l(i-7,0),l(0,i-7),s(),h(),d(t,r),e>=7&&v(t),null==a&&(a=p(e,n,u)),w(a,r)},l=function(t,r){for(var e=-1;e<=7;e+=1)if(!(t+e<=-1||i<=t+e))for(var n=-1;n<=7;n+=1)r+n<=-1||i<=r+n||(o[t+e][r+n]=0<=e&&e<=6&&(0==n||6==n)||0<=n&&n<=6&&(0==e||6==e)||2<=e&&e<=4&&2<=n&&n<=4)},h=function(){for(var t=8;t<i-8;t+=1)null==o[t][6]&&(o[t][6]=t%2==0);for(var r=8;r<i-8;r+=1)null==o[6][r]&&(o[6][r]=r%2==0)},s=function(){for(var t=B.getPatternPosition(e),r=0;r<t.length;r+=1)for(var n=0;n<t.length;n+=1){var i=t[r],a=t[n];if(null==o[i][a])for(var u=-2;u<=2;u+=1)for(var f=-2;f<=2;f+=1)o[i+u][a+f]=-2==u||2==u||-2==f||2==f||0==u&&0==f}},v=function(t){for(var r=B.getBCHTypeNumber(e),n=0;n<18;n+=1){var a=!t&&1==(r>>n&1);o[Math.floor(n/3)][n%3+i-8-3]=a}for(n=0;n<18;n+=1){a=!t&&1==(r>>n&1);o[n%3+i-8-3][Math.floor(n/3)]=a}},d=function(t,r){for(var e=n<<3|r,a=B.getBCHTypeInfo(e),u=0;u<15;u+=1){var f=!t&&1==(a>>u&1);u<6?o[u][8]=f:u<8?o[u+1][8]=f:o[i-15+u][8]=f}for(u=0;u<15;u+=1){f=!t&&1==(a>>u&1);u<8?o[8][i-u-1]=f:u<9?o[8][15-u-1+1]=f:o[8][15-u-1]=f}o[i-8][8]=!t},w=function(t,r){for(var e=-1,n=i-1,a=7,u=0,f=B.getMaskFunction(r),c=i-1;c>0;c-=2)for(6==c&&(c-=1);;){for(var g=0;g<2;g+=1)if(null==o[n][c-g]){var l=!1;u<t.length&&(l=1==(t[u]>>>a&1)),f(n,c-g)&&(l=!l),o[n][c-g]=l,-1==(a-=1)&&(u+=1,a=7)}if((n+=e)<0||i<=n){n-=e,e=-e;break}}},p=function(t,r,e){for(var n=A.getRSBlocks(t,r),o=b(),i=0;i<e.length;i+=1){var a=e[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var u=0;for(i=0;i<n.length;i+=1)u+=n[i].dataCount;if(o.getLengthInBits()>8*u)throw"code length overflow. ("+o.getLengthInBits()+">"+8*u+")";for(o.getLengthInBits()+4<=8*u&&o.put(0,4);o.getLengthInBits()%8!=0;)o.putBit(!1);for(;!(o.getLengthInBits()>=8*u||(o.put(236,8),o.getLengthInBits()>=8*u));)o.put(17,8);return function(t,r){for(var e=0,n=0,o=0,i=new Array(r.length),a=new Array(r.length),u=0;u<r.length;u+=1){var f=r[u].dataCount,c=r[u].totalCount-f;n=Math.max(n,f),o=Math.max(o,c),i[u]=new Array(f);for(var g=0;g<i[u].length;g+=1)i[u][g]=255&t.getBuffer()[g+e];e+=f;var l=B.getErrorCorrectPolynomial(c),h=k(i[u],l.getLength()-1).mod(l);for(a[u]=new Array(l.getLength()-1),g=0;g<a[u].length;g+=1){var s=g+h.getLength()-a[u].length;a[u][g]=s>=0?h.getAt(s):0}}var v=0;for(g=0;g<r.length;g+=1)v+=r[g].totalCount;var d=new Array(v),w=0;for(g=0;g<n;g+=1)for(u=0;u<r.length;u+=1)g<i[u].length&&(d[w]=i[u][g],w+=1);for(g=0;g<o;g+=1)for(u=0;u<r.length;u+=1)g<a[u].length&&(d[w]=a[u][g],w+=1);return d}(o,n)};f.addData=function(t,r){var e=null;switch(r=r||"Byte"){case"Numeric":e=M(t);break;case"Alphanumeric":e=x(t);break;case"Byte":e=m(t);break;case"Kanji":e=L(t);break;default:throw"mode:"+r}u.push(e),a=null},f.isDark=function(t,r){if(t<0||i<=t||r<0||i<=r)throw t+","+r;return o[t][r]},f.getModuleCount=function(){return i},f.make=function(){if(e<1){for(var t=1;t<40;t++){for(var r=A.getRSBlocks(t,n),o=b(),i=0;i<u.length;i++){var a=u[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var g=0;for(i=0;i<r.length;i++)g+=r[i].dataCount;if(o.getLengthInBits()<=8*g)break}e=t}c(!1,function(){for(var t=0,r=0,e=0;e<8;e+=1){c(!0,e);var n=B.getLostPoint(f);(0==e||t>n)&&(t=n,r=e)}return r}())},f.createTableTag=function(t,r){t=t||2;var e="";e+='<table style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: "+(r=void 0===r?4*t:r)+"px;",e+='">',e+="<tbody>";for(var n=0;n<f.getModuleCount();n+=1){e+="<tr>";for(var o=0;o<f.getModuleCount();o+=1)e+='<td style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: 0px;",e+=" width: "+t+"px;",e+=" height: "+t+"px;",e+=" background-color: ",e+=f.isDark(n,o)?"#000000":"#ffffff",e+=";",e+='"/>';e+="</tr>"}return e+="</tbody>",e+="</table>"},f.createSvgTag=function(t,r,e,n){var o={};"object"==typeof arguments[0]&&(t=(o=arguments[0]).cellSize,r=o.margin,e=o.alt,n=o.title),t=t||2,r=void 0===r?4*t:r,(e="string"==typeof e?{text:e}:e||{}).text=e.text||null,e.id=e.text?e.id||"qrcode-description":null,(n="string"==typeof n?{text:n}:n||{}).text=n.text||null,n.id=n.text?n.id||"qrcode-title":null;var i,a,u,c,g=f.getModuleCount()*t+2*r,l="";for(c="l"+t+",0 0,"+t+" -"+t+",0 0,-"+t+"z ",l+='<svg version="1.1" xmlns="http://www.w3.org/2000/svg"',l+=o.scalable?"":' width="'+g+'px" height="'+g+'px"',l+=' viewBox="0 0 '+g+" "+g+'" ',l+=' preserveAspectRatio="xMinYMin meet"',l+=n.text||e.text?' role="img" aria-labelledby="'+y([n.id,e.id].join(" ").trim())+'"':"",l+=">",l+=n.text?'<title id="'+y(n.id)+'">'+y(n.text)+"</title>":"",l+=e.text?'<description id="'+y(e.id)+'">'+y(e.text)+"</description>":"",l+='<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>',l+='<path d="',a=0;a<f.getModuleCount();a+=1)for(u=a*t+r,i=0;i<f.getModuleCount();i+=1)f.isDark(a,i)&&(l+="M"+(i*t+r)+","+u+c);return l+='" stroke="transparent" fill="black"/>',l+="</svg>"},f.createDataURL=function(t,r){t=t||2,r=void 0===r?4*t:r;var e=f.getModuleCount()*t+2*r,n=r,o=e-r;return I(e,e,function(r,e){if(n<=r&&r<o&&n<=e&&e<o){var i=Math.floor((r-n)/t),a=Math.floor((e-n)/t);return f.isDark(a,i)?0:1}return 1})},f.createImgTag=function(t,r,e){t=t||2,r=void 0===r?4*t:r;var n=f.getModuleCount()*t+2*r,o="";return o+="<img",o+=' src="',o+=f.createDataURL(t,r),o+='"',o+=' width="',o+=n,o+='"',o+=' height="',o+=n,o+='"',e&&(o+=' alt="',o+=y(e),o+='"'),o+="/>"};var y=function(t){for(var r="",e=0;e<t.length;e+=1){var n=t.charAt(e);switch(n){case"<":r+="&lt;";break;case">":r+="&gt;";break;case"&":r+="&amp;";break;case'"':r+="&quot;";break;default:r+=n}}return r};return f.createASCII=function(t,r){if((t=t||1)<2)return function(t){t=void 0===t?2:t;var r,e,n,o,i,a=1*f.getModuleCount()+2*t,u=t,c=a-t,g={"██":"█","█ ":"▀"," █":"▄","  ":" "},l={"██":"▀","█ ":"▀"," █":" ","  ":" "},h="";for(r=0;r<a;r+=2){for(n=Math.floor((r-u)/1),o=Math.floor((r+1-u)/1),e=0;e<a;e+=1)i="█",u<=e&&e<c&&u<=r&&r<c&&f.isDark(n,Math.floor((e-u)/1))&&(i=" "),u<=e&&e<c&&u<=r+1&&r+1<c&&f.isDark(o,Math.floor((e-u)/1))?i+=" ":i+="█",h+=t<1&&r+1>=c?l[i]:g[i];h+="\n"}return a%2&&t>0?h.substring(0,h.length-a-1)+Array(a+1).join("▀"):h.substring(0,h.length-1)}(r);t-=1,r=void 0===r?2*t:r;var e,n,o,i,a=f.getModuleCount()*t+2*r,u=r,c=a-r,g=Array(t+1).join("██"),l=Array(t+1).join("  "),h="",s="";for(e=0;e<a;e+=1){for(o=Math.floor((e-u)/t),s="",n=0;n<a;n+=1)i=1,u<=n&&n<c&&u<=e&&e<c&&f.isDark(o,Math.floor((n-u)/t))&&(i=0),s+=i?g:l;for(o=0;o<t;o+=1)h+=s+"\n"}return h.substring(0,h.length-1)},f.renderTo2dContext=function(t,r){r=r||2;for(var e=f.getModuleCount(),n=0;n<e;n++)for(var o=0;o<e;o++)t.fillStyle=f.isDark(n,o)?"black":"white",t.fillRect(n*r,o*r,r,r)},f};t.stringToBytes=(t.stringToBytesFuncs={default:function(t){for(var r=[],e=0;e<t.length;e+=1){var n=t.charCodeAt(e);r.push(255&n)}return r}}).default,t.createStringToBytes=function(t,r){var e=function(){for(var e=S(t),n=function(){var t=e.read();if(-1==t)throw"eof";return t},o=0,i={};;){var a=e.read();if(-1==a)break;var u=n(),f=n()<<8|n();i[String.fromCharCode(a<<8|u)]=f,o+=1}if(o!=r)throw o+" != "+r;return i}(),n="?".charCodeAt(0);return function(t){for(var r=[],o=0;o<t.length;o+=1){var i=t.charCodeAt(o);if(i<128)r.push(i);else{var a=e[t.charAt(o)];"number"==typeof a?(255&a)==a?r.push(a):(r.push(a>>>8),r.push(255&a)):r.push(n)}}return r}};var r,e,n,o,i,a=1,u=2,f=4,c=8,g={L:1,M:0,Q:3,H:2},l=0,h=1,s=2,v=3,d=4,w=5,p=6,y=7,B=(r=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],e=1335,n=7973,i=function(t){for(var r=0;0!=t;)r+=1,t>>>=1;return r},(o={}).getBCHTypeInfo=function(t){for(var r=t<<10;i(r)-i(e)>=0;)r^=e<<i(r)-i(e);return 21522^(t<<10|r)},o.getBCHTypeNumber=function(t){for(var r=t<<12;i(r)-i(n)>=0;)r^=n<<i(r)-i(n);return t<<12|r},o.getPatternPosition=function(t){return r[t-1]},o.getMaskFunction=function(t){switch(t){case l:return function(t,r){return(t+r)%2==0};case h:return function(t,r){return t%2==0};case s:return function(t,r){return r%3==0};case v:return function(t,r){return(t+r)%3==0};case d:return function(t,r){return(Math.floor(t/2)+Math.floor(r/3))%2==0};case w:return function(t,r){return t*r%2+t*r%3==0};case p:return function(t,r){return(t*r%2+t*r%3)%2==0};case y:return function(t,r){return(t*r%3+(t+r)%2)%2==0};default:throw"bad maskPattern:"+t}},o.getErrorCorrectPolynomial=function(t){for(var r=k([1],0),e=0;e<t;e+=1)r=r.multiply(k([1,C.gexp(e)],0));return r},o.getLengthInBits=function(t,r){if(1<=r&&r<10)switch(t){case a:return 10;case u:return 9;case f:case c:return 8;default:throw"mode:"+t}else if(r<27)switch(t){case a:return 12;case u:return 11;case f:return 16;case c:return 10;default:throw"mode:"+t}else{if(!(r<41))throw"type:"+r;switch(t){case a:return 14;case u:return 13;case f:return 16;case c:return 12;default:throw"mode:"+t}}},o.getLostPoint=function(t){for(var r=t.getModuleCount(),e=0,n=0;n<r;n+=1)for(var o=0;o<r;o+=1){for(var i=0,a=t.isDark(n,o),u=-1;u<=1;u+=1)if(!(n+u<0||r<=n+u))for(var f=-1;f<=1;f+=1)o+f<0||r<=o+f||0==u&&0==f||a==t.isDark(n+u,o+f)&&(i+=1);i>5&&(e+=3+i-5)}for(n=0;n<r-1;n+=1)for(o=0;o<r-1;o+=1){var c=0;t.isDark(n,o)&&(c+=1),t.isDark(n+1,o)&&(c+=1),t.isDark(n,o+1)&&(c+=1),t.isDark(n+1,o+1)&&(c+=1),0!=c&&4!=c||(e+=3)}for(n=0;n<r;n+=1)for(o=0;o<r-6;o+=1)t.isDark(n,o)&&!t.isDark(n,o+1)&&t.isDark(n,o+2)&&t.isDark(n,o+3)&&t.isDark(n,o+4)&&!t.isDark(n,o+5)&&t.isDark(n,o+6)&&(e+=40);for(o=0;o<r;o+=1)for(n=0;n<r-6;n+=1)t.isDark(n,o)&&!t.isDark(n+1,o)&&t.isDark(n+2,o)&&t.isDark(n+3,o)&&t.isDark(n+4,o)&&!t.isDark(n+5,o)&&t.isDark(n+6,o)&&(e+=40);var g=0;for(o=0;o<r;o+=1)for(n=0;n<r;n+=1)t.isDark(n,o)&&(g+=1);return e+=Math.abs(100*g/r/r-50)/5*10},o),C=function(){for(var t=new Array(256),r=new Array(256),e=0;e<8;e+=1)t[e]=1<<e;for(e=8;e<256;e+=1)t[e]=t[e-4]^t[e-5]^t[e-6]^t[e-8];for(e=0;e<255;e+=1)r[t[e]]=e;var n={glog:function(t){if(t<1)throw"glog("+t+")";return r[t]},gexp:function(r){for(;r<0;)r+=255;for(;r>=256;)r-=255;return t[r]}};return n}();function k(t,r){if(void 0===t.length)throw t.length+"/"+r;var e=function(){for(var e=0;e<t.length&&0==t[e];)e+=1;for(var n=new Array(t.length-e+r),o=0;o<t.length-e;o+=1)n[o]=t[o+e];return n}(),n={getAt:function(t){return e[t]},getLength:function(){return e.length},multiply:function(t){for(var r=new Array(n.getLength()+t.getLength()-1),e=0;e<n.getLength();e+=1)for(var o=0;o<t.getLength();o+=1)r[e+o]^=C.gexp(C.glog(n.getAt(e))+C.glog(t.getAt(o)));return k(r,0)},mod:function(t){if(n.getLength()-t.getLength()<0)return n;for(var r=C.glog(n.getAt(0))-C.glog(t.getAt(0)),e=new Array(n.getLength()),o=0;o<n.getLength();o+=1)e[o]=n.getAt(o);for(o=0;o<t.getLength();o+=1)e[o]^=C.gexp(C.glog(t.getAt(o))+r);return k(e,0).mod(t)}};return n}var A=function(){var t=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12,7,37,13],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]],r=function(t,r){var e={};return e.totalCount=t,e.dataCount=r,e},e={};return e.getRSBlocks=function(e,n){var o=function(r,e){switch(e){case g.L:return t[4*(r-1)+0];case g.M:return t[4*(r-1)+1];case g.Q:return t[4*(r-1)+2];case g.H:return t[4*(r-1)+3];default:return}}(e,n);if(void 0===o)throw"bad rs block @ typeNumber:"+e+"/errorCorrectionLevel:"+n;for(var i=o.length/3,a=[],u=0;u<i;u+=1)for(var f=o[3*u+0],c=o[3*u+1],l=o[3*u+2],h=0;h<f;h+=1)a.push(r(c,l));return a},e}(),b=function(){var t=[],r=0,e={getBuffer:function(){return t},getAt:function(r){var e=Math.floor(r/8);return 1==(t[e]>>>7-r%8&1)},put:function(t,r){for(var n=0;n<r;n+=1)e.putBit(1==(t>>>r-n-1&1))},getLengthInBits:function(){return r},putBit:function(e){var n=Math.floor(r/8);t.length<=n&&t.push(0),e&&(t[n]|=128>>>r%8),r+=1}};return e},M=function(t){var r=a,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+2<r.length;)t.put(o(r.substring(n,n+3)),10),n+=3;n<r.length&&(r.length-n==1?t.put(o(r.substring(n,n+1)),4):r.length-n==2&&t.put(o(r.substring(n,n+2)),7))}},o=function(t){for(var r=0,e=0;e<t.length;e+=1)r=10*r+i(t.charAt(e));return r},i=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);throw"illegal char :"+t};return n},x=function(t){var r=u,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+1<r.length;)t.put(45*o(r.charAt(n))+o(r.charAt(n+1)),11),n+=2;n<r.length&&t.put(o(r.charAt(n)),6)}},o=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);if("A"<=t&&t<="Z")return t.charCodeAt(0)-"A".charCodeAt(0)+10;switch(t){case" ":return 36;case"$":return 37;case"%":return 38;case"*":return 39;case"+":return 40;case"-":return 41;case".":return 42;case"/":return 43;case":":return 44;default:throw"illegal char :"+t}};return n},m=function(r){var e=f,n=t.stringToBytes(r),o={getMode:function(){return e},getLength:function(t){return n.length},write:function(t){for(var r=0;r<n.length;r+=1)t.put(n[r],8)}};return o},L=function(r){var e=c,n=t.stringToBytesFuncs.SJIS;if(!n)throw"sjis not supported.";!function(){var t=n("友");if(2!=t.length||38726!=(t[0]<<8|t[1]))throw"sjis not supported."}();var o=n(r),i={getMode:function(){return e},getLength:function(t){return~~(o.length/2)},write:function(t){for(var r=o,e=0;e+1<r.length;){var n=(255&r[e])<<8|255&r[e+1];if(33088<=n&&n<=40956)n-=33088;else{if(!(57408<=n&&n<=60351))throw"illegal char at "+(e+1)+"/"+n;n-=49472}n=192*(n>>>8&255)+(255&n),t.put(n,13),e+=2}if(e<r.length)throw"illegal char at "+(e+1)}};return i},D=function(){var t=[],r={writeByte:function(r){t.push(255&r)},writeShort:function(t){r.writeByte(t),r.writeByte(t>>>8)},writeBytes:function(t,e,n){e=e||0,n=n||t.length;for(var o=0;o<n;o+=1)r.writeByte(t[o+e])},writeString:function(t){for(var e=0;e<t.length;e+=1)r.writeByte(t.charCodeAt(e))},toByteArray:function(){return t},toString:function(){var r="";r+="[";for(var e=0;e<t.length;e+=1)e>0&&(r+=","),r+=t[e];return r+="]"}};return r},S=function(t){var r=t,e=0,n=0,o=0,i={read:function(){for(;o<8;){if(e>=r.length){if(0==o)return-1;throw"unexpected end of file./"+o}var t=r.charAt(e);if(e+=1,"="==t)return o=0,-1;t.match(/^\s$/)||(n=n<<6|a(t.charCodeAt(0)),o+=6)}var i=n>>>o-8&255;return o-=8,i}},a=function(t){if(65<=t&&t<=90)return t-65;if(97<=t&&t<=122)return t-97+26;if(48<=t&&t<=57)return t-48+52;if(43==t)return 62;if(47==t)return 63;throw"c:"+t};return i},I=function(t,r,e){for(var n=function(t,r){var e=t,n=r,o=new Array(t*r),i={setPixel:function(t,r,n){o[r*e+t]=n},write:function(t){t.writeString("GIF87a"),t.writeShort(e),t.writeShort(n),t.writeByte(128),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(255),t.writeByte(255),t.writeByte(255),t.writeString(","),t.writeShort(0),t.writeShort(0),t.writeShort(e),t.writeShort(n),t.writeByte(0);var r=a(2);t.writeByte(2);for(var o=0;r.length-o>255;)t.writeByte(255),t.writeBytes(r,o,255),o+=255;t.writeByte(r.length-o),t.writeBytes(r,o,r.length-o),t.writeByte(0),t.writeString(";")}},a=function(t){for(var r=1<<t,e=1+(1<<t),n=t+1,i=u(),a=0;a<r;a+=1)i.add(String.fromCharCode(a));i.add(String.fromCharCode(r)),i.add(String.fromCharCode(e));var f,c,g,l=D(),h=(f=l,c=0,g=0,{write:function(t,r){if(t>>>r!=0)throw"length over";for(;c+r>=8;)f.writeByte(255&(t<<c|g)),r-=8-c,t>>>=8-c,g=0,c=0;g|=t<<c,c+=r},flush:function(){c>0&&f.writeByte(g)}});h.write(r,n);var s=0,v=String.fromCharCode(o[s]);for(s+=1;s<o.length;){var d=String.fromCharCode(o[s]);s+=1,i.contains(v+d)?v+=d:(h.write(i.indexOf(v),n),i.size()<4095&&(i.size()==1<<n&&(n+=1),i.add(v+d)),v=d)}return h.write(i.indexOf(v),n),h.write(e,n),h.flush(),l.toByteArray()},u=function(){var t={},r=0,e={add:function(n){if(e.contains(n))throw"dup key:"+n;t[n]=r,r+=1},size:function(){return r},indexOf:function(r){return t[r]},contains:function(r){return void 0!==t[r]}};return e};return i}(t,r),o=0;o<r;o+=1)for(var i=0;i<t;i+=1)n.setPixel(i,o,e(i,o));var a=D();n.write(a);for(var u=function(){var t=0,r=0,e=0,n="",o={},i=function(t){n+=String.fromCharCode(a(63&t))},a=function(t){if(t<0);else{if(t<26)return 65+t;if(t<52)return t-26+97;if(t<62)return t-52+48;if(62==t)return 43;if(63==t)return 47}throw"n:"+t};return o.writeByte=function(n){for(t=t<<8|255&n,r+=8,e+=1;r>=6;)i(t>>>r-6),r-=6},o.flush=function(){if(r>0&&(i(t<<6-r),t=0,r=0),e%3!=0)for(var o=3-e%3,a=0;a<o;a+=1)n+="="},o.toString=function(){return n},o}(),f=a.toByteArray(),c=0;c<f.length;c+=1)u.writeByte(f[c]);return u.flush(),"data:image/gif;base64,"+u};return t}();qrcode.stringToBytesFuncs["UTF-8"]=function(t){return function(t){for(var r=[],e=0;e<t.length;e++){var n=t.charCodeAt(e);n<128?r.push(n):n<2048?r.push(192|n>>6,128|63&n):n<55296||n>=57344?r.push(224|n>>12,128|n>>6&63,128|63&n):(e++,n=65536+((1023&n)<<10|1023&t.charCodeAt(e)),r.push(240|n>>18,128|n>>12&63,128|n>>6&63,128|63&n))}return r}(t)},function(t){"function"==typeof define&&define.amd?define([],t):"object"==typeof exports&&(module.exports=t())}(function(){return qrcode});</script>
 <script>
 (function(){
 "use strict";
 /* ================= storage ================= */
-var K = {id:"pp.id", theme:"pp.theme", tx:"pp.tx", seller:"pp.seller", sheet:"pp.sheet", sheetUrl:"pp.sheetUrl", outbox:"pp.outbox"};
+var K = {id:"q2.id", theme:"q2.theme", tx:"q2.tx", outbox:"q2.outbox"};
 function load(k, d){ try{ var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }catch(e){ return d; } }
 function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 
@@ -648,9 +935,9 @@ $("thaiBtn").addEventListener("click", function(){
   recordSale(currentSatang, "thai");
 });
 function recordSale(amount, method){
-  var tx = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), t: Date.now(), a: amount, s: sellerName(), m: method};
+  var now = Date.now(), tx = {id: now.toString(36) + Math.random().toString(36).slice(2, 8), t: now, a: amount, s: sellerName(), m: method, day: dayKey(now)};
   txs.push(tx); save(K.tx, txs);
-  queueOp({type:"add", id:tx.id, t:tx.t, a:tx.a, seller:tx.s, m:method});
+  queueOp({type:"add", id:tx.id, t:tx.t, a:tx.a, m:method, day:tx.day});
   try{ navigator.vibrate && navigator.vibrate(12); }catch(e){}
   resetAmount(); renderHeader();
   amountEl.focus({preventScroll:true});
@@ -719,32 +1006,33 @@ function renderSummary(){
   $("txEmpty").hidden = !!list.length;
   $("clearBtn").disabled = !txs.length;
 
-  var linked = !!load(K.sheet, "");
-  $("statTotalK").textContent = (viewDay === today ? "ยอดรวมวันนี้" : "ยอดรวม") + (linked ? " · เครื่องนี้" : "");
-  $("listHeadK").textContent = linked ? "ประวัติรายการ · เครื่องนี้" : "ประวัติรายการ";
-  $("allCard").hidden = !linked;
-  if (linked) loadAllSummary(viewDay);
+  var owner = !!(FB.ctx && FB.ctx.role === "owner");
+  $("statTotalK").textContent = (viewDay === today ? "ยอดรวมวันนี้" : "ยอดรวม") + (owner ? " · เครื่องนี้" : "");
+  $("listHeadK").textContent = owner ? "ประวัติรายการ · เครื่องนี้" : "ประวัติรายการ";
+  $("allCard").hidden = !owner;
+  if (owner) loadAllSummary(viewDay);
 }
 var allReq = 0;
 function loadAllSummary(day){
-  var my = ++allReq, url = load(K.sheet, "");
-  var sheetUrl = load(K.sheetUrl, "");
-  $("sheetLink").hidden = !sheetUrl; if (sheetUrl) $("sheetLink").href = sheetUrl;
+  var my = ++allReq;
   $("allTotal").textContent = ""; $("allList").innerHTML = ""; $("allSplit").hidden = true;
-  showAllMsg(pendingCount() ? "กำลังส่งรายการที่ค้าง แล้วจะโหลดยอดรวม…" : "กำลังโหลดยอดรวมทุกเครื่อง…");
+  showAllMsg(pendingCount() ? "กำลังส่งรายการที่ค้าง แล้วจะโหลดยอดรวม…" : "กำลังโหลดยอดรวมทั้งร้าน…");
   var run = function(){
-    api("GET", url, {action:"summary", date:day}).then(function(r){
+    FB.withTimeout(FB.db.collection(FB.path("tx")).where("day", "==", day).get(), 15000).then(function(q){
       if (my !== allReq) return;
-      if (!r || !r.ok) throw new Error(r && r.error || "bad");
-      if (r.sheetUrl){ save(K.sheetUrl, r.sheetUrl); $("sheetLink").href = r.sheetUrl; $("sheetLink").hidden = false; }
-      $("allTotal").innerHTML = "฿" + money(r.total) + "<small>" + r.count + " รายการ</small>";
-      var hasSplit = typeof r.cash === "number";
-      $("allSplit").innerHTML = hasSplit ? "QR <b>฿" + money(r.total - r.cash - (r.thai || 0)) + "</b> · เงินสด <b>฿" + money(r.cash) + "</b>" + (r.thai ? " · ไทยช่วยไทย <b>฿" + money(r.thai) + "</b>" : "") : "";
-      $("allSplit").hidden = !hasSplit || !r.count;
-      $("allList").innerHTML = r.sellers.map(function(s){
+      var total = 0, count = 0, cash = 0, thai = 0, by = {};
+      q.forEach(function(d){
+        var v = d.data(); if (v.status !== "ok") return;
+        total += v.a; count++; if (v.m === "cash") cash += v.a; if (v.m === "thai") thai += v.a;
+        var n = v.seller || "ไม่ระบุ", b = by[n] || (by[n] = {name:n, total:0, count:0}); b.total += v.a; b.count++;
+      });
+      $("allTotal").innerHTML = "฿" + money(total) + "<small>" + count + " รายการ</small>";
+      $("allSplit").innerHTML = "QR <b>฿" + money(total - cash - thai) + "</b> · เงินสด <b>฿" + money(cash) + "</b>" + (thai ? " · ไทยช่วยไทย <b>฿" + money(thai) + "</b>" : "");
+      $("allSplit").hidden = !count;
+      $("allList").innerHTML = Object.keys(by).map(function(k){ return by[k]; }).sort(function(x, y){ return y.total - x.total; }).map(function(s){
         return "<li><span>" + esc(s.name) + "</span><span>฿" + money(s.total) + "<small>" + s.count + "</small></span></li>";
       }).join("");
-      showAllMsg(r.count ? "" : "ยังไม่มีรายการของวันนี้ใน Sheet");
+      showAllMsg(count ? "" : "ยังไม่มีรายการของวันนี้");
     }).catch(function(){
       if (my !== allReq) return;
       showAllMsg(navigator.onLine === false ? "ออฟไลน์อยู่ จะแสดงยอดรวมเมื่อต่อเน็ตได้" : "โหลดยอดรวมไม่สำเร็จ ลองเปิดหน้านี้ใหม่อีกครั้ง");
@@ -763,9 +1051,7 @@ function openDialog(){ var s = $("scrim2"), d = $("confirmDlg"); s.hidden = fals
 function closeDialog(){ var s = $("scrim2"), d = $("confirmDlg"); s.classList.remove("show"); d.classList.remove("show");
   setTimeout(function(){ s.hidden = true; d.hidden = true; }, 260); }
 $("clearBtn").addEventListener("click", function(){
-  $("cfText").textContent = load(K.sheet, "")
-    ? "รายการในเครื่องนี้จะถูกลบและกู้คืนไม่ได้ ข้อมูลใน Google Sheet ยังอยู่ครบ"
-    : "รายการรับเงินทุกวันจะถูกลบออกจากเครื่องนี้ และกู้คืนไม่ได้";
+  $("cfText").textContent = "รายการในเครื่องนี้จะถูกลบและกู้คืนไม่ได้ ข้อมูลที่ส่งเข้าระบบของร้านแล้วยังอยู่ครบ";
   openDialog();
 });
 $("cfNo").addEventListener("click", closeDialog);
@@ -777,9 +1063,7 @@ $("cfYes").addEventListener("click", function(){
 /* ================= settings ================= */
 function fillSettings(){
   var id = parseId(load(K.id, "")); $("ppId").value = id ? fmtId(id) : load(K.id, ""); validateId(false); syncSeg();
-  $("seller").value = load(K.seller, "");
-  $("sheetIn").value = load(K.sheet, "");
-  sheetHint(load(K.sheet, "") ? "ok" : "idle");
+  renderAccount();
 }
 function validateId(strict){
   var el = $("ppId"), hint = $("ppHint"), raw = el.value, d = raw.replace(/\D/g, ""), id = parseId(raw);
@@ -797,150 +1081,60 @@ $("ppId").addEventListener("blur", function(){ var id = parseId(this.value); if 
 function commitSettings(){
   var raw = $("ppId").value, d = raw.replace(/\D/g, ""), id = parseId(raw);
   if (id) save(K.id, id.digits); else if (!d) save(K.id, "");
-  save(K.seller, $("seller").value.trim().slice(0, 30));
-  var s = $("sheetIn").value.trim();
-  if (!s){ if (load(K.sheet, "")){ save(K.sheet, ""); save(K.sheetUrl, ""); } }
-  else if (isScriptUrl(s) && s !== load(K.sheet, "")){ save(K.sheet, s); save(K.sheetUrl, ""); }
+  if (id && FB.ctx && FB.ctx.role === "owner" && FB.ctx.promptpay !== id.digits) FB.setPromptpay(id.digits).catch(function(){});
   renderPayee(); renderSync(); flush();
 }
 $("setDone").addEventListener("click", function(){
   var raw = $("ppId").value;
   if (raw.replace(/\D/g, "") && !parseId(raw)){ validateId(true); $("ppId").focus(); return; }
-  var s = $("sheetIn").value.trim();
-  if (s && !isScriptUrl(s)){ sheetHint("bad"); $("sheetIn").focus(); return; }
   closeTop(true);
 });
 
-/* --- Google Sheet link + setup code --- */
-var CODE_PREFIX = "QRPAY1:";
-function isScriptUrl(s){ return /^https:\/\/script\.google(usercontent)?\.com\/.+/.test(s); }
-function b64e(str){ return btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
-function b64d(str){ str = str.replace(/-/g, "+").replace(/_/g, "/"); while (str.length % 4) str += "="; return decodeURIComponent(escape(atob(str))); }
-function makeCode(){ return CODE_PREFIX + b64e(JSON.stringify({u: load(K.sheet, ""), p: load(K.id, "")})); }
-function readCode(s){
-  var i = s.indexOf(CODE_PREFIX); if (i === -1) return null;
-  try{ var o = JSON.parse(b64d(s.slice(i + CODE_PREFIX.length).trim())); return isScriptUrl(o.u) ? o : null; }catch(e){ return null; }
+/* --- account --- */
+$("signOut").addEventListener("click", function(){ FB.signOut(); });
+function renderAccount(){
+  var c = FB.ctx; if (!c) return;
+  $("acct").innerHTML = "<b>" + esc(c.name) + "</b> · " + (c.role === "owner" ? "เจ้าของร้าน" : "พนักงาน") +
+    "<br><span>" + esc(c.shopName) + "</span><br><span>" + esc(c.email) + "</span>";
+  $("ppId").readOnly = c.role !== "owner";
+  if (c.role !== "owner") $("ppHint").textContent = "เบอร์พร้อมเพย์ตั้งโดยเจ้าของร้าน เครื่องพนักงานเปลี่ยนเองไม่ได้";
+  $("privNote").textContent = "รายการที่กดยืนยันจะถูกส่งเข้าระบบของร้านอัตโนมัติ และเก็บสำเนาไว้ในเครื่องนี้ ถ้าไม่มีสัญญาณ ระบบจะส่งให้เองเมื่อกลับมาออนไลน์";
 }
-function sheetHint(state, extra){
-  var h = $("sheetHint"), el = $("sheetIn");
-  el.classList.toggle("bad", state === "bad");
-  h.className = "hint" + (state === "ok" || state === "good" ? " ok" : state === "bad" ? " bad" : "");
-  h.textContent = {
-    idle: "ไม่บังคับ ถ้าไม่ใส่ ยอดจะเก็บไว้ในเครื่องนี้อย่างเดียว",
-    ok: "เชื่อมแล้ว ยอดที่กดยืนยันจะถูกส่งเข้า Sheet อัตโนมัติ",
-    code: "ใส่การตั้งค่าจากรหัสแล้ว (ลิงก์ Sheet และเบอร์พร้อมเพย์) อย่าลืมใส่ชื่อคนขาย",
-    bad: "ต้องเป็นลิงก์ที่ขึ้นต้นด้วย https://script.google.com/… หรือรหัสที่ขึ้นต้นด้วย QRPAY1:",
-    testing: "กำลังทดสอบ…",
-    good: "เชื่อมต่อสำเร็จ" + (extra ? " · " + extra : ""),
-    fail: "เชื่อมต่อไม่ได้" + (extra ? " · " + extra : " ตรวจว่า Deploy เป็น Web app และตั้ง Who has access เป็น Anyone แล้ว")
-  }[state] || "";
-  if (state === "fail") h.className = "hint bad";
-  $("copyCode").disabled = !load(K.sheet, "");
-  $("privNote").textContent = load(K.sheet, "")
-    ? "รายการที่กดยืนยันจะถูกส่งไปที่ Google Sheet ของคุณเท่านั้น และเก็บสำเนาไว้ในเครื่องนี้"
-    : "ข้อมูลทั้งหมดเก็บไว้ในเครื่องนี้เท่านั้น ไม่มีการส่งออกไปที่ใด";
-}
-$("sheetIn").addEventListener("input", function(){
-  var s = this.value.trim(), code = readCode(s);
-  if (code){
-    this.value = code.u; save(K.sheet, code.u); save(K.sheetUrl, "");
-    if (parseId(code.p)){ save(K.id, parseId(code.p).digits); $("ppId").value = fmtId(parseId(code.p)); validateId(false); renderPayee(); }
-    sheetHint("code"); renderSync(); flush();
-    if (!$("seller").value.trim()) setTimeout(function(){ $("seller").focus(); }, 50);
-    return;
-  }
-  if (!s) sheetHint("idle");
-  else if (isScriptUrl(s)){ save(K.sheet, s); save(K.sheetUrl, ""); sheetHint("ok"); renderSync(); }
-  else sheetHint(s.length > 12 ? "bad" : "idle");
-});
-$("sheetTest").addEventListener("click", function(){
-  var s = $("sheetIn").value.trim();
-  if (!isScriptUrl(s)){ sheetHint("bad"); return; }
-  save(K.sheet, s); sheetHint("testing");
-  api("GET", s, {}).then(function(r){
-    if (!r || !r.ok || r.app !== "qr-pay") throw new Error("bad");
-    if (r.sheetUrl) save(K.sheetUrl, r.sheetUrl);
-    sheetHint("good", r.name || ""); renderSync(); flush();
-  }).catch(function(e){ sheetHint("fail", e && e.reason); });
-});
-$("copyCode").addEventListener("click", function(){
-  if (!load(K.sheet, "")) return;
-  var code = makeCode(), btn = this;
-  var done = function(){ btn.textContent = "คัดลอกแล้ว ส่งให้เครื่องอื่นทาง LINE ได้เลย"; setTimeout(function(){ btn.textContent = "คัดลอกรหัสตั้งค่าให้เครื่องอื่น"; }, 2500); };
-  var fallback = function(){ var el = $("sheetIn"); el.value = code; el.focus(); el.select(); sheetHint("idle"); $("sheetHint").textContent = "คัดลอกข้อความในช่องด้านบนไปส่งให้เครื่องอื่น"; };
-  try{ navigator.clipboard.writeText(code).then(done, fallback); }catch(e){ fallback(); }
-});
 
-/* ================= sync to Google Sheet ================= */
+/* ================= sync to Firebase ================= */
 var outbox = load(K.outbox, []); if (!Array.isArray(outbox)) outbox = [];
-var syncing = null, lastSyncFailed = false;
-function sellerName(){ return load(K.seller, "") || "ไม่ระบุ"; }
+var syncing = null, lastSyncFailed = false, lastErr = "";
+function sellerName(){ return FB.ctx ? FB.ctx.name : "ไม่ระบุ"; }
 function pendingCount(){ return outbox.length; }
 function queueOp(op){ outbox.push(op); save(K.outbox, outbox); renderSync(); }
 function removeTx(id){
   txs = txs.filter(function(x){ return x.id !== id; }); save(K.tx, txs);
-  var unsent = outbox.some(function(o){ return o.type === "add" && o.id === id; });
-  if (unsent) { outbox = outbox.filter(function(o){ return o.id !== id; }); save(K.outbox, outbox); }
-  else if (load(K.sheet, "")) queueOp({type:"void", id:id});
+  queueOp({type:"void", id:id});   // always queued after its "add", so the server ends in a consistent state
   renderHeader(); renderSync(); flush();
 }
-function xhr(method, url, body){
-  return new Promise(function(res, rej){
-    var x = new XMLHttpRequest(), bad = function(m){ var e = new Error(m); e.reason = m; rej(e); };
-    x.open(method, url, true); x.timeout = 20000;
-    x.onload = function(){
-      var j; try{ j = JSON.parse(x.responseText); }catch(e){ return bad("ได้หน้าที่ไม่ใช่ข้อมูลจากสคริปต์ (อาจเป็นหน้าล็อกอิน Google) สถานะ " + x.status); }
-      res(j);
-    };
-    x.onerror = function(){ bad("เครือข่ายของเครื่องนี้ต่อ Google ไม่ได้ ลองสลับ Wi-Fi/เน็ตมือถือ หรือปิดตัวบล็อกโฆษณา"); };
-    x.ontimeout = function(){ bad("หมดเวลา เครือข่ายช้าเกินไป"); };
-    x.send(body || null);
-  });
-}
-function request(method, url, body){
-  if (!window.fetch) return xhr(method, url, body);
-  var ctrl = window.AbortController ? new AbortController() : null;
-  var timer = setTimeout(function(){ ctrl && ctrl.abort(); }, 20000);
-  var opts = {method:method, redirect:"follow", signal: ctrl ? ctrl.signal : undefined};
-  if (body) opts.body = body;
-  return fetch(url, opts).then(function(r){ clearTimeout(timer); return r.text(); }, function(e){ clearTimeout(timer); return xhr(method, url, body); })
-    .then(function(t){
-      try{ return JSON.parse(t); }catch(e){ var er = new Error("html"); er.reason = "ได้หน้าที่ไม่ใช่ข้อมูลจากสคริปต์ (อาจเป็นหน้าล็อกอิน Google) ตรวจว่าตั้งเป็น Anyone และใช้ลิงก์ /exec"; throw er; }
-    });
-}
-function api(method, url, data){
-  if (method === "GET"){
-    var q = Object.keys(data).map(function(k){ return encodeURIComponent(k) + "=" + encodeURIComponent(data[k]); }).join("&");
-    if (q) url += (url.indexOf("?") === -1 ? "?" : "&") + q;
-    return request("GET", url);
-  }
-  return request(method, url, JSON.stringify(data));   // text/plain: no CORS preflight for Apps Script
-}
 function flush(){
-  var url = load(K.sheet, "");
-  if (!url || !outbox.length) { renderSync(); return Promise.resolve(); }
+  if (!FB.ctx || !outbox.length){ renderSync(); return Promise.resolve(); }
   if (syncing) return syncing;
-  var batch = outbox.slice(0, 200);
+  if (navigator.onLine === false){ renderSync(); return Promise.resolve(); }
   renderSync(true);
-  syncing = api("POST", url, {v:1, device:sellerName(), ops:batch}).then(function(r){
-    if (!r || !r.ok || !Array.isArray(r.done)) throw new Error(r && r.error || "bad");
-    var done = {}; r.done.forEach(function(k){ done[k] = 1; });
-    outbox = outbox.filter(function(o){ return !done[o.type + ":" + o.id]; });
-    save(K.outbox, outbox); lastSyncFailed = false;
-  }).catch(function(){ lastSyncFailed = true; })
-    .then(function(){
-      syncing = null; renderSync();
-      if (!lastSyncFailed && outbox.length) return flush();   // more than one batch
+  function next(){
+    var op = outbox[0]; if (!op) return Promise.resolve();
+    var p = op.type === "add" ? FB.putTx(op) : FB.voidTx(op.id);
+    return p.then(function(){
+      outbox = outbox.filter(function(o){ return !(o.type === op.type && o.id === op.id); });
+      save(K.outbox, outbox); return next();
     });
+  }
+  syncing = next().then(function(){ lastSyncFailed = false; lastErr = ""; }, function(e){ lastSyncFailed = true; lastErr = e && e.code || ""; })
+    .then(function(){ syncing = null; renderSync(); });
   return syncing;
 }
 function renderSync(busy){
-  var chip = $("syncChip"), linked = !!load(K.sheet, "");
-  chip.hidden = !linked;
-  if (!linked) return;
+  var chip = $("syncChip"); chip.hidden = !FB.ctx;
+  if (!FB.ctx) return;
   var n = outbox.length;
   chip.className = "sync " + (n ? "wait" : "ok") + (busy ? " busy" : "");
-  chip.textContent = busy ? "กำลังส่ง" : n ? "รอส่ง " + n : "ซิงก์แล้ว";
+  chip.textContent = busy ? "กำลังส่ง" : n ? (lastErr === "permission-denied" ? "ไม่มีสิทธิ์ส่ง " + n : "รอส่ง " + n) : "ซิงก์แล้ว";
 }
 window.addEventListener("online", function(){ flush(); });
 setInterval(function(){ if (outbox.length) flush(); }, 30000);
@@ -996,8 +1190,12 @@ setInterval(renderHeader, 60000);
 window.addEventListener("resize", function(){ fitAmount(amountEl.value || "0"); });
 
 /* ================= boot ================= */
-applyTheme(); renderHeader(); renderPayee(); onAmountInput(); renderSync(); flush();
-setTimeout(function(){ try{ amountEl.focus({preventScroll:true}); }catch(e){} }, 60);
+applyTheme();
+FB.start("seller", function(){
+  if (FB.ctx.promptpay) save(K.id, FB.ctx.promptpay);
+  renderHeader(); renderPayee(); onAmountInput(); renderSync(); flush();
+  setTimeout(function(){ try{ amountEl.focus({preventScroll:true}); }catch(e){} }, 60);
+});
 })();
 </script>
 <!--BODY-END-->
