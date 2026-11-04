@@ -221,6 +221,19 @@ tfoot td{font-weight:700;border-bottom:0}
 .btn{height:54px;border-radius:18px;font-size:17px;font-weight:650;background:var(--accent);color:var(--on-accent)}
 .note{font-size:13px;color:var(--muted);line-height:1.6;padding:0 4px;margin:0}
 
+@media (min-width:900px){
+  .page{max-width:1120px;padding-left:32px;padding-right:32px}
+  .bodycol{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+  .bodycol>#chartCard,.bodycol>.pwrap,.bodycol>.empty{grid-column:1/-1}
+  .pwrap{flex-direction:row!important;align-items:flex-start}
+  .pwrap>*{flex:1;min-width:0}
+  .pwrap.solo .card.profit{display:grid;grid-template-columns:1fr 1fr;column-gap:40px;align-content:start}
+  .pwrap.solo .card.profit>h2,.card.profit>.profit-big{grid-column:1}
+  .pwrap.solo .card.profit>.prow,.card.profit>.sub{grid-column:2}
+  .pwrap.solo .card.profit>.prow:first-of-type{border-top:0}
+  .plot{height:300px}
+  .hero-v{font-size:72px}
+}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{height:38px;padding:0 14px;border-radius:999px;background:var(--surface-2);font-size:14px;font-weight:600;border:1px solid transparent}
 .chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
@@ -959,7 +972,7 @@ function paint(res, prevRes, w, meta, extra){
   renderBanner();
   renderHero(S, P, w);
   var body = $("body"); body.textContent = "";
-  var col = h("div"); col.style.cssText = "display:flex;flex-direction:column;gap:18px";
+  var col = h("div"); col.className = "bodycol"; col.style.cssText = "display:flex;flex-direction:column;gap:18px";
   var pc = renderProfit(S, w); if (pc) col.appendChild(pc);
   if (!S.open.length){
     var e = h("div", "card empty"); e.appendChild(h("b", "", "ยังไม่มีรายการขายในช่วงนี้"));
@@ -1196,8 +1209,8 @@ function renderProfit(S, w){
   if (w.mode === "m") fx = fixedFor(X.fixed, ymOf(w.from));
   else for (mi = 1; mi <= 12; mi++){ var k = y + "-" + pad2(mi); if (k <= nowM) fx += fixedFor(X.fixed, k); }
   var profit = S.total - buy - fx;
-  var wrap = h("div"); wrap.style.cssText = "display:flex;flex-direction:column;gap:18px";
-  var c = h("section", "card"); c.appendChild(h("h2", "", profit < 0 ? "ขาดทุน" : "กำไร"));
+  var wrap = h("div"); wrap.className = "pwrap " + (w.mode === "y" ? "two" : "solo"); wrap.style.cssText = "display:flex;flex-direction:column;gap:18px";
+  var c = h("section", "card profit"); c.appendChild(h("h2", "", profit < 0 ? "ขาดทุน" : "กำไร"));
   c.appendChild(h("div", "profit-big num " + (profit < 0 ? "neg" : "pos"), (profit < 0 ? "−" : "") + baht(profit)));
   c.appendChild(prow("ยอดขาย", baht(S.total)));
   c.appendChild(prow("ซื้อของ (" + X.exp.length + " รายการ)", "−" + baht(buy)));
