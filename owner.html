@@ -251,6 +251,15 @@ html body{min-height:100%;height:auto;overflow-y:visible;display:block;overscrol
 #viewBuy,#viewBack{max-width:640px;margin:0 auto;width:100%}
 .view .group{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:16px}
 #bList .pu .nn{white-space:normal}
+.share-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:50px;margin-top:18px}
+.share-btn svg{width:22px;height:22px}
+.btn.alt{background:var(--surface-2);color:var(--fg)}
+.shprev{background:var(--surface-2);border-radius:var(--r-md);padding:12px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.shprev img{display:block;width:100%;max-width:360px;height:auto;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.18)}
+.shprev img[src=""],.shprev img:not([src]){display:none}
+.shopt{display:flex;align-items:flex-start;gap:12px;padding:8px 0;font-size:15px;line-height:1.4}
+.shopt[hidden],#shOpts[hidden]{display:none}
+.shopt input{width:22px;height:22px;flex:none;margin:0;accent-color:var(--accent)}
 .pu.void{opacity:.55}
 .pu.void .aa{text-decoration:line-through}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -302,6 +311,7 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
     <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V11M12 20V4M19 20v-6"/></symbol>
     <symbol id="i-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></symbol>
     <symbol id="i-calplus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M12 13v5M9.5 15.5h5"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></symbol>
   </defs>
 </svg>
 
@@ -412,6 +422,25 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
 </div></nav></div>
 
 <div class="scrim" id="scrim" hidden></div>
+<section class="sheet" id="shSheet" role="dialog" aria-modal="true" aria-labelledby="shTitle" hidden>
+  <div class="grabber"></div>
+  <div class="sheet-head">
+    <h2 class="sheet-title" id="shTitle">แชร์ยอดขาย</h2>
+    <button class="close-btn" id="shClose" aria-label="ปิด"><svg><use href="#i-x"/></svg></button>
+  </div>
+  <div class="sheet-body">
+    <div class="group" id="shOpts">
+      <div class="group-k">เลือกสิ่งที่จะแสดงในรูป</div>
+      <label class="shopt" id="shProfitW"><input type="checkbox" id="shProfit"><span>กำไร / ขาดทุน (หักซื้อของและค่าใช้จ่ายรายเดือน)</span></label>
+      <label class="shopt" id="shSellW"><input type="checkbox" id="shSell" checked><span>ยอดแยกตามคนขาย</span></label>
+    </div>
+    <div class="hint" id="shHint"></div>
+    <button class="btn" id="shShare" type="button">แชร์</button>
+    <button class="btn alt" id="shSave" type="button">บันทึกรูป</button>
+    <div class="shprev"><img id="shImg" alt="ตัวอย่างรูปที่จะแชร์"><div class="hint" id="shWait">กำลังสร้างรูป…</div></div>
+  </div>
+</section>
+
 <section class="sheet" id="setSheet" role="dialog" aria-modal="true" aria-labelledby="setTitle" hidden>
   <div class="grabber"></div>
   <div class="sheet-head">
@@ -1055,6 +1084,10 @@ function renderHero(S, P, w){
   if (w.gran === "h"){ if (S.count) m2.appendChild(h("span", "num", "เฉลี่ย " + baht(Math.round(S.total / S.count)) + " ต่อรายการ")); }
   else if (S.open.length) m2.appendChild(h("span", "num", "เฉลี่ย " + baht(S.avg) + " ต่อ" + (w.gran === "m" ? "เดือน" : "วัน") + "ที่เปิดขาย"));
   el.appendChild(m2);
+  var sb = h("button", "btn share-btn", "แชร์เป็นรูปภาพ"); sb.type = "button";
+  var si = document.createElementNS("http://www.w3.org/2000/svg", "svg"), su = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  su.setAttribute("href", "#i-share"); si.appendChild(su); sb.insertBefore(si, sb.firstChild);
+  sb.addEventListener("click", openShare); el.appendChild(sb);
 }
 
 function renderBest(S){
@@ -1349,6 +1382,184 @@ document.querySelectorAll("[data-mode]").forEach(function(b){
 $("prevBtn").addEventListener("click", function(){ step(-1); refresh(); });
 $("nextBtn").addEventListener("click", function(){ step(1); refresh(); });
 $("refreshBtn").addEventListener("click", function(){ if (tab === "sales") refresh(); else if (tab === "buy"){ loadExp(); loadFixed(); } else loadBack(); });
+
+
+/* ================= share as image ================= */
+var shOpen = false, shBlob = null, shReq = 0;
+function profitCalc(S, w){
+  var X = ctx.extra; if (!X || (w.mode !== "m" && w.mode !== "y")) return null;
+  var buy = 0; X.exp.forEach(function(x){ buy += x.a; });
+  var nowM = ymOf(TODAY), y = w.from.getFullYear(), fx = 0, mi;
+  if (w.mode === "m") fx = fixedFor(X.fixed, ymOf(w.from));
+  else for (mi = 1; mi <= 12; mi++){ var k = y + "-" + pad2(mi); if (k <= nowM) fx += fixedFor(X.fixed, k); }
+  return {buy: buy, n: X.exp.length, fx: fx, profit: S.total - buy - fx};
+}
+function rrect(c, x, y, w, h2, r){
+  r = Math.min(r, w / 2, h2 / 2); c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h2, r); c.arcTo(x + w, y + h2, x, y + h2, r);
+  c.arcTo(x, y + h2, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+function drawShare(opt){
+  var S = ctx.S, P = ctx.P, w = ctx.w, res = ctx.res;
+  var W = 1080, M = 40, PAD = 56, IW = W - 2 * M - 2 * PAD, FONT = '"Sukhumvit Set","Noto Sans Thai","Leelawadee UI",-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif';
+  var C = {bg:"#eef3f0", card:"#ffffff", fg:"#0f1714", muted:"#66736d", line:"#e3e9e6", accent:"#059669", qr:"#0a8f63", cash:"#c26a00", thai:"#2563eb", bad:"#dc2626"};
+  var blocks = [];
+  function T(c, txt, x, y, size, weight, color, align){ c.font = (weight || 400) + " " + size + "px " + FONT; c.fillStyle = color || C.fg; c.textAlign = align || "left"; c.textBaseline = "alphabetic"; c.fillText(txt, x, y); }
+  function fit(c, txt, maxW, size, weight){ c.font = (weight || 400) + " " + size + "px " + FONT; if (c.measureText(txt).width <= maxW) return txt; while (txt.length > 1 && c.measureText(txt + "…").width > maxW) txt = txt.slice(0, -1); return txt + "…"; }
+  var shop = (FB.ctx && FB.ctx.shopName) || "";
+  /* header */
+  blocks.push({h: 170, draw: function(c, y){
+    T(c, fit(c, shop, IW, 34, 700), 0, y + 42, 34, 700, C.accent);
+    T(c, w.title, 0, y + 106, 46, 700, C.fg);
+    T(c, w.label, 0, y + 152, 30, 500, C.muted);
+  }});
+  /* hero */
+  var hasD = !!(P && P.total > 0 && S.total >= 0);
+  blocks.push({h: hasD ? 300 : 246, draw: function(c, y){
+    var big = "฿" + Math.floor(S.total / 100).toLocaleString("en-US"), dec = "." + String(S.total % 100).padStart(2, "0");
+    var sz = 124; c.font = "800 " + sz + "px " + FONT; while (c.measureText(big).width + 90 > IW && sz > 60){ sz -= 6; c.font = "800 " + sz + "px " + FONT; }
+    var bw = c.measureText(big).width; T(c, big, 0, y + 120, sz, 800, C.fg); T(c, dec, bw + 6, y + 120, Math.round(sz * .42), 600, C.muted);
+    var line = 176;
+    if (P && P.total > 0 && S.total >= 0){
+      var pct = Math.round((S.total - P.total) / P.total * 100), col = pct > 0 ? C.accent : pct < 0 ? C.bad : C.muted;
+      var tx = (pct > 0 ? "▲ +" : pct < 0 ? "▼ −" : "● ") + Math.abs(pct) + "%";
+      T(c, tx, 0, y + line, 34, 700, col); c.font = "700 34px " + FONT; var dw = c.measureText(tx).width;
+      T(c, w.cmp, dw + 20, y + line, 28, 400, C.muted); line += 54;
+    }
+    var info = S.count.toLocaleString("en-US") + " รายการ";
+    if (w.gran === "h"){ if (S.count) info += " · เฉลี่ย " + baht(Math.round(S.total / S.count)) + " ต่อรายการ"; }
+    else if (S.open.length) info += " · เฉลี่ย " + baht(S.avg) + " ต่อ" + (w.gran === "m" ? "เดือน" : "วัน") + "ที่เปิดขาย";
+    T(c, fit(c, info, IW, 30, 500), 0, y + line, 30, 500, C.muted);
+  }});
+  /* chart */
+  var days = res.days;
+  if (S.open.length){
+    blocks.push({h: 400, draw: function(c, y){
+      var n = days.length, slot = IW / n, bw = Math.min(slot * .64, 72), top = y + 50, base = y + 320, ch = base - top;
+      var max = 0; days.forEach(function(d){ if (d.total > max) max = d.total; }); if (max <= 0) max = 1;
+      c.strokeStyle = C.line; c.lineWidth = 2; c.beginPath(); c.moveTo(0, base + 1); c.lineTo(IW, base + 1); c.stroke();
+      days.forEach(function(d, i){
+        var cx = slot * i + slot / 2, hh = d.total / max * ch;
+        if (d.total > 0){
+          hh = Math.max(hh, 6); var x = cx - bw / 2;
+          c.save(); rrect(c, x, base - hh, bw, hh, Math.min(10, bw / 3)); c.clip();
+          var qrA = d.total - d.cash - (d.thai || 0), segs = [[d.cash, C.cash], [d.thai || 0, C.thai], [qrA, C.qr]], yy = base;
+          segs.forEach(function(sg){ if (sg[0] <= 0) return; var sh = sg[0] / d.total * hh; c.fillStyle = sg[1]; c.fillRect(x, yy - sh, bw, sh + 0.5); yy -= sh; });
+          c.restore();
+        }
+        var lab = w.gran === "m" ? MON_S[+d.date.slice(5, 7) - 1] : (d.x || "");
+        if (lab) T(c, lab, cx, base + 38, w.gran === "m" ? 22 : 26, 500, C.muted, "center");
+        if (d.xs) T(c, d.xs, cx, base + 68, 22, 400, C.muted, "center");
+      });
+      if (S.best && S.best.total > 0){
+        var bi = days.indexOf(S.best), bx = slot * bi + slot / 2, bh = Math.max(S.best.total / max * ch, 6);
+        var txt = "฿" + Math.floor(S.best.total / 100).toLocaleString("en-US"); c.font = "700 26px " + FONT; var tw = c.measureText(txt).width;
+        var tx2 = Math.min(Math.max(bx, tw / 2), IW - tw / 2); T(c, txt, tx2, base - bh - 12, 26, 700, C.fg, "center");
+      }
+    }});
+  } else {
+    blocks.push({h: 140, draw: function(c, y){ T(c, "ยังไม่มีรายการขายในช่วงนี้", IW / 2, y + 80, 34, 600, C.muted, "center"); }});
+  }
+  /* channels */
+  if (S.total > 0){
+    blocks.push({h: 250, draw: function(c, y){
+      var bx = 0, bwid = IW, bh = 26, tot = S.total;
+      c.save(); rrect(c, 0, y + 20, bwid, bh, 13); c.clip();
+      [[S.qr, C.qr], [S.cash, C.cash], [S.thai, C.thai]].forEach(function(sg){ if (sg[0] <= 0) return; var ww = sg[0] / tot * bwid; c.fillStyle = sg[1]; c.fillRect(bx, y + 20, ww + 0.5, bh); bx += ww; });
+      c.restore();
+      var rows = [[C.qr, "QR", S.qr], [C.cash, "เงินสด", S.cash]]; if (S.thai) rows.push([C.thai, "ไทยช่วยไทย", S.thai]);
+      rows.forEach(function(r, i){
+        var yy = y + 100 + i * 52; c.fillStyle = r[0]; rrect(c, 0, yy - 22, 24, 24, 7); c.fill();
+        T(c, r[1], 42, yy, 30, 500, C.fg);
+        T(c, baht(r[2]) + "  (" + Math.round(r[2] / tot * 100) + "%)", IW, yy, 30, 600, C.fg, "right");
+      });
+    }});
+  }
+  /* sellers */
+  var sl = opt.sellers && res.sellers && res.sellers.length ? res.sellers.slice(0, 6) : null;
+  if (sl){
+    blocks.push({h: 80 + sl.length * 62, draw: function(c, y){
+      T(c, "ยอดแยกตามคนขาย", 0, y + 36, 30, 700, C.fg);
+      sl.forEach(function(s2, i){
+        var yy = y + 100 + i * 62;
+        T(c, fit(c, s2.name, IW * .5, 30, 500), 0, yy, 30, 500, C.fg);
+        T(c, baht(s2.total), IW, yy, 30, 700, C.fg, "right");
+        c.font = "700 30px " + FONT; var aw = c.measureText(baht(s2.total)).width;
+        T(c, s2.count + " รายการ", IW - aw - 20, yy, 24, 400, C.muted, "right");
+      });
+    }});
+  }
+  /* profit */
+  var pf = opt.profit ? profitCalc(S, w) : null;
+  if (pf){
+    blocks.push({h: 380, draw: function(c, y){
+      var neg = pf.profit < 0;
+      T(c, neg ? "ขาดทุน" : "กำไร", 0, y + 36, 30, 700, C.muted);
+      T(c, (neg ? "−" : "") + baht(pf.profit), 0, y + 120, 84, 800, neg ? C.bad : C.accent);
+      var rows = [["ยอดขาย", baht(S.total)], ["ซื้อของ (" + pf.n + " รายการ)", "−" + baht(pf.buy)], ["ค่าใช้จ่ายรายเดือน", "−" + baht(pf.fx)]];
+      rows.forEach(function(r, i){ var yy = y + 200 + i * 52; T(c, r[0], 0, yy, 30, 400, C.muted); T(c, r[1], IW, yy, 30, 600, C.fg, "right"); });
+      T(c, "คิดแบบเงินเข้า-ออก ซื้อของวันไหนหักวันนั้น", 0, y + 214 + 3 * 52, 24, 400, C.muted);
+    }});
+  }
+  /* footer */
+  blocks.push({h: 70, draw: function(c, y){ T(c, "สร้างเมื่อ " + fmtDay(TODAY) + " " + (TODAY.getFullYear() + 543) + " · " + timeStr(Date.now()), IW / 2, y + 44, 24, 400, C.muted, "center"); }});
+
+  var gap = 36, inner = 0; blocks.forEach(function(b){ inner += b.h; }); inner += gap * (blocks.length - 1);
+  var H = inner + 2 * PAD + 2 * M;
+  var cv = document.createElement("canvas"); cv.width = W; cv.height = H; var c = cv.getContext("2d");
+  c.fillStyle = C.bg; c.fillRect(0, 0, W, H);
+  c.fillStyle = C.card; rrect(c, M, M, W - 2 * M, H - 2 * M, 44); c.fill();
+  var y = M + PAD;
+  blocks.forEach(function(b, i){
+    c.save(); c.translate(M + PAD, 0); b.draw(c, y); c.restore();
+    y += b.h;
+    if (i < blocks.length - 1){ c.strokeStyle = C.line; c.lineWidth = 2; c.beginPath(); c.moveTo(M + PAD, y + gap / 2); c.lineTo(W - M - PAD, y + gap / 2); c.stroke(); y += gap; }
+  });
+  return cv;
+}
+function shOpts(){ return {profit: $("shProfit").checked && !$("shProfitW").hidden, sellers: $("shSell").checked && !$("shSellW").hidden}; }
+function shRender(){
+  var my = ++shReq; $("shWait").hidden = false; $("shImg").removeAttribute("src"); shBlob = null; $("shShare").disabled = true; $("shSave").disabled = true; $("shHint").textContent = "";
+  var go = function(){
+    var cv; try{ cv = drawShare(shOpts()); }catch(e){ $("shWait").textContent = "สร้างรูปไม่สำเร็จ"; return; }
+    cv.toBlob(function(b){
+      if (my !== shReq || !b) return;
+      shBlob = b; var old = $("shImg").dataset.u; if (old) URL.revokeObjectURL(old);
+      var u = URL.createObjectURL(b); $("shImg").dataset.u = u; $("shImg").src = u; $("shWait").hidden = true; $("shWait").textContent = "กำลังสร้างรูป…"; $("shShare").disabled = false; $("shSave").disabled = false;
+    }, "image/png");
+  };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(go, go); else go();
+}
+function shName(){ var w = ctx.w; return "ยอดขาย_" + ymd(w.from) + (ymd(w.from) === ymd(w.to) ? "" : "_" + ymd(w.to)) + ".png"; }
+function openShare(){
+  if (shOpen || !ctx) return; shOpen = true;
+  var w = ctx.w, canProfit = (w.mode === "m" || w.mode === "y") && !!ctx.extra;
+  $("shProfitW").hidden = !canProfit; if (!canProfit) $("shProfit").checked = false;
+  $("shSellW").hidden = !(ctx.res.sellers && ctx.res.sellers.length);
+  $("shOpts").hidden = $("shProfitW").hidden && $("shSellW").hidden;
+  $("scrim").hidden = false; $("shSheet").hidden = false;
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ $("scrim").classList.add("show"); $("shSheet").classList.add("show"); }); });
+  shRender();
+}
+function closeShare(){
+  if (!shOpen) return; shOpen = false; shReq++;
+  $("scrim").classList.remove("show"); $("shSheet").classList.remove("show");
+  setTimeout(function(){ if (!shOpen && !isOpen){ $("scrim").hidden = true; } if (!shOpen) $("shSheet").hidden = true; }, 380);
+}
+$("shClose").addEventListener("click", closeShare); $("scrim").addEventListener("click", closeShare);
+document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeShare(); });
+$("shProfit").addEventListener("change", shRender); $("shSell").addEventListener("change", shRender);
+function shDownload(){
+  var a = document.createElement("a"); a.href = URL.createObjectURL(shBlob); a.download = shName(); document.body.appendChild(a); a.click();
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 1500);
+}
+$("shSave").addEventListener("click", function(){ if (!shBlob) return; shDownload(); $("shHint").textContent = "บันทึกรูปแล้ว (ถ้าไม่ขึ้น ให้กดค้างที่รูปแล้วเลือกบันทึก)"; });
+$("shShare").addEventListener("click", function(){
+  if (!shBlob) return;
+  var file; try{ file = new File([shBlob], shName(), {type: "image/png"}); }catch(e){ file = null; }
+  if (file && navigator.canShare && navigator.canShare({files: [file]})){
+    navigator.share({files: [file], title: ctx.w.title}).then(function(){ $("shHint").textContent = ""; }, function(e){ if (e && e.name !== "AbortError") $("shHint").textContent = "แชร์ไม่สำเร็จ ลองกดบันทึกรูปแทน"; });
+  } else { shDownload(); $("shHint").textContent = "เครื่องนี้ยังแชร์ตรงไม่ได้ จึงบันทึกรูปให้แทน"; }
+});
 
 /* ================= settings ================= */
 /* ---- account / shop code / members / manual entry / export ---- */
