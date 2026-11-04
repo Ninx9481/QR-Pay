@@ -1709,8 +1709,9 @@ function showView(t){
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("[data-view]").forEach(function(b){ b.addEventListener("click", function(){ if (FB.ctx) showView(b.dataset.view); }); });
-document.addEventListener("focusin", function(e){ var n = e.target && e.target.tagName; if (n === "INPUT" || n === "SELECT" || n === "TEXTAREA") document.body.classList.add("kb"); });
-document.addEventListener("focusout", function(){ setTimeout(function(){ var n = document.activeElement && document.activeElement.tagName; if (n !== "INPUT" && n !== "SELECT" && n !== "TEXTAREA") document.body.classList.remove("kb"); }, 120); });
+function typing(el){ if (!el) return false; if (el.tagName === "TEXTAREA") return true; if (el.tagName !== "INPUT") return false; return /^(text|number|search|email|password|tel|url)$/.test(el.type || "text"); }
+document.addEventListener("focusin", function(e){ if (typing(e.target)) document.body.classList.add("kb"); else document.body.classList.remove("kb"); });
+document.addEventListener("focusout", function(){ setTimeout(function(){ if (!typing(document.activeElement)) document.body.classList.remove("kb"); }, 120); });
 
 /* ================= theme ================= */
 var mql = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
