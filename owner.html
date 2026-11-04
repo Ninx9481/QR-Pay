@@ -234,6 +234,20 @@ tfoot td{font-weight:700;border-bottom:0}
   .plot{height:300px}
   .hero-v{font-size:72px}
 }
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:15;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabbar-in{display:flex;max-width:720px;margin:0 auto}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;font-size:12px;font-weight:600;color:var(--muted);min-width:0}
+.tab svg{width:24px;height:24px}
+.tab[aria-pressed="true"]{color:var(--accent)}
+body.kb .tabbar{display:none}
+body[data-tab="buy"] #updated,body[data-tab="back"] #updated{visibility:hidden}
+.page{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 96px)}
+.view{display:flex;flex-direction:column;gap:18px;min-width:0}
+#viewBuy,#viewBack{max-width:640px;margin:0 auto;width:100%}
+.view .group{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:16px}
+#bList .pu .nn{white-space:normal}
+.pu.void{opacity:.55}
+.pu.void .aa{text-decoration:line-through}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{height:38px;padding:0 14px;border-radius:999px;background:var(--surface-2);font-size:14px;font-weight:600;border:1px solid transparent}
 .chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
@@ -280,14 +294,16 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
     <symbol id="i-down" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20 3 5h18z"/></symbol>
     <symbol id="i-flat" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="10" width="16" height="4" rx="2"/></symbol>
     <symbol id="i-bill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v18l2.4-1.6L10 21l2-1.6L14 21l2.6-1.6L19 21V3l-2.4 1.6L14 3l-2 1.6L10 3 7.4 4.6z"/><path d="M9 9h6M9 13h6"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V11M12 20V4M19 20v-6"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></symbol>
+    <symbol id="i-calplus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M12 13v5M9.5 15.5h5"/></symbol>
   </defs>
 </svg>
 
 <main class="page">
   <header class="top">
-    <div class="brand"><h1>ยอดขายร้าน</h1><small id="updated">&nbsp;</small></div>
+    <div class="brand"><h1 id="hTitle">ยอดขายร้าน</h1><small id="updated">&nbsp;</small></div>
     <div class="icons">
-      <button class="icon-btn" id="openExp" aria-label="รายจ่าย"><svg><use href="#i-bill"/></svg></button>
       <button class="icon-btn" id="refreshBtn" aria-label="โหลดข้อมูลใหม่"><svg><use href="#i-refresh"/></svg></button>
       <button class="icon-btn" id="openSettings" aria-label="ตั้งค่า"><svg><use href="#i-gear"/></svg></button>
     </div>
@@ -295,6 +311,7 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
 
   <div class="banner" id="banner" hidden></div>
 
+  <div id="viewSales" class="view">
   <section class="controls" aria-label="เลือกช่วงเวลา">
     <div class="seg s4" role="group" aria-label="ช่วงเวลา">
       <span class="seg-pill" id="segPill"></span>
@@ -314,90 +331,9 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
     <section id="hero"></section>
     <div id="body"></div>
   </div>
-</main>
+  </div>
 
-<div class="scrim" id="scrim" hidden></div>
-<section class="sheet" id="setSheet" role="dialog" aria-modal="true" aria-labelledby="setTitle" hidden>
-  <div class="grabber"></div>
-  <div class="sheet-head">
-    <h2 class="sheet-title" id="setTitle">ตั้งค่า</h2>
-    <button class="close-btn" id="setClose" aria-label="ปิด"><svg><use href="#i-x"/></svg></button>
-  </div>
-  <div class="sheet-body">
-    <div class="group">
-      <div class="group-k">บัญชี</div>
-      <div class="acct" id="acct"></div>
-      <div class="mini-row"><button class="mini" id="signOut" type="button">ออกจากระบบ</button></div>
-    </div>
-    <div class="group">
-      <div class="group-k" id="wkK">สัปดาห์เริ่มต้นวัน</div>
-      <div class="seg s2" role="group" aria-labelledby="wkK">
-        <span class="seg-pill" id="wkPill"></span>
-        <button data-wk-opt="0" aria-pressed="false" type="button">อาทิตย์</button>
-        <button data-wk-opt="1" aria-pressed="false" type="button">จันทร์</button>
-      </div>
-      <div class="hint">ใช้กับมุมมอง "สัปดาห์" และลำดับวันในกราฟวันไหนขายดี</div>
-    </div>
-    <div class="group">
-      <div class="group-k">หมวดซื้อของ</div>
-      <div id="catList"></div>
-      <input class="text-in" id="catIn" type="text" maxlength="20" placeholder="ชื่อหมวดใหม่" aria-label="ชื่อหมวดใหม่">
-      <div class="hint" id="catHint">เอาหมวดออกจากตัวเลือกได้ รายการที่เคยบันทึกไว้ยังอยู่ครบ</div>
-      <div class="mini-row"><button class="mini" id="catAdd" type="button">เพิ่มหมวด</button><button class="mini" id="catReset" type="button">คืนค่าเริ่มต้น</button></div>
-    </div>
-    <div class="group">
-      <div class="group-k">รหัสร้าน (ส่งให้พนักงานเพื่อเข้าร่วม)</div>
-      <div class="code-box" id="codeBox">······</div>
-      <div class="mini-row">
-        <button class="mini" id="codeCopy" type="button">คัดลอกรหัส</button>
-        <button class="mini" id="codeNew" type="button">สร้างรหัสใหม่</button>
-      </div>
-      <div class="hint" id="codeHint">มีพนักงานออก? สร้างรหัสใหม่และเอาคนนั้นออกจากรายชื่อด้านล่าง</div>
-    </div>
-    <div class="group">
-      <div class="group-k">สมาชิกในร้าน</div>
-      <div id="memList"></div>
-    </div>
-    <div class="group">
-      <div class="group-k">เพิ่มรายการย้อนหลัง (กรณีลืมกด)</div>
-      <input class="text-in" id="mDate" type="date" aria-label="วันที่">
-      <input class="text-in" id="mAmt" type="number" inputmode="decimal" step="0.01" min="0" placeholder="ยอด (บาท)" aria-label="ยอดเป็นบาท">
-      <select class="text-in" id="mCh" aria-label="ช่องทาง"><option value="cash">เงินสด</option><option value="qr">QR</option><option value="thai">ไทยช่วยไทย</option></select>
-      <input class="text-in" id="mName" type="text" maxlength="40" placeholder="ชื่อคนขาย (ไม่ใส่ = บันทึกเอง)" aria-label="ชื่อคนขาย">
-      <div class="hint" id="mHint"></div>
-      <div class="mini-row"><button class="mini" id="mAdd" type="button">เพิ่มรายการ</button></div>
-    </div>
-    <div class="group">
-      <div class="group-k">นำเข้าข้อมูลเก่าจาก Google Sheet</div>
-      <div class="mini-row"><a class="mini" id="importLink" href="./import.html" style="display:inline-flex;align-items:center;text-decoration:none;color:inherit">เปิดหน้านำเข้า</a></div>
-      <div class="hint">ดาวน์โหลดแท็บ "รายการ" เป็น .csv แล้วนำเข้าที่นี่ นำเข้าซ้ำได้ไม่ซ้อนกัน</div>
-    </div>
-    <div class="group">
-      <div class="group-k">ส่งออกข้อมูล</div>
-      <div class="mini-row"><button class="mini" id="csvBtn" type="button">ดาวน์โหลด CSV ของช่วงที่ดูอยู่</button></div>
-      <div class="hint" id="csvHint"></div>
-    </div>
-    <div class="group">
-      <div class="group-k" id="themeK">ธีม</div>
-      <div class="seg" role="group" aria-labelledby="themeK">
-        <span class="seg-pill" id="themePill"></span>
-        <button data-theme-opt="light" aria-pressed="false">สว่าง</button>
-        <button data-theme-opt="dark" aria-pressed="false">มืด</button>
-        <button data-theme-opt="system" aria-pressed="false">ตามระบบ</button>
-      </div>
-    </div>
-    <p class="note">หน้านี้เปิดได้เฉพาะบัญชีเจ้าของร้าน ข้อมูลที่โหลดล่าสุดจะเก็บไว้ในเครื่องนี้ไว้ดูตอนไม่มีอินเทอร์เน็ต</p>
-    <button class="btn" id="setDone">เสร็จสิ้น</button>
-  </div>
-</section>
-
-<section class="sheet" id="expSheet" role="dialog" aria-modal="true" aria-labelledby="expTitle" hidden>
-  <div class="grabber"></div>
-  <div class="sheet-head">
-    <h2 class="sheet-title" id="expTitle">รายจ่าย</h2>
-    <button class="close-btn" id="expClose" aria-label="ปิด"><svg><use href="#i-x"/></svg></button>
-  </div>
-  <div class="sheet-body">
+  <div id="viewBuy" class="view" hidden>
     <div class="seg s2" role="group" aria-label="ประเภทรายจ่าย">
       <span class="seg-pill" id="etPill"></span>
       <button data-etab="buy" aria-pressed="true" type="button">ซื้อของ</button>
@@ -445,9 +381,98 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
         <div class="mini-row"><button class="mini" id="fAdd" type="button">เพิ่มรายการ</button></div>
       </div>
     </div>
-    <button class="btn" id="expDone">เสร็จสิ้น</button>
+  </div>
+
+  <div id="viewBack" class="view" hidden>
+    <div class="group">
+      <div class="group-k">เพิ่มยอดขายย้อนหลัง (กรณีลืมกด)</div>
+      <input class="text-in" id="mDate" type="date" aria-label="วันที่">
+      <input class="text-in" id="mAmt" type="number" inputmode="decimal" step="0.01" min="0" placeholder="ยอด (บาท)" aria-label="ยอดเป็นบาท">
+      <select class="text-in" id="mCh" aria-label="ช่องทาง"><option value="cash">เงินสด</option><option value="qr">QR</option><option value="thai">ไทยช่วยไทย</option></select>
+      <input class="text-in" id="mName" type="text" maxlength="40" placeholder="ชื่อคนขาย (ไม่ใส่ = บันทึกเอง)" aria-label="ชื่อคนขาย">
+      <div class="hint" id="mHint"></div>
+      <div class="mini-row"><button class="mini" id="mAdd" type="button">เพิ่มยอดขาย</button></div>
+    </div>
+    <div class="group">
+      <div class="group-k" id="bListK">รายการขายของวันที่เลือก</div>
+      <div id="bList"></div>
+    </div>
+  </div>
+</main>
+
+<nav class="tabbar" aria-label="เมนูหลัก"><div class="tabbar-in">
+  <button class="tab" data-view="sales" aria-pressed="true" type="button"><svg><use href="#i-chart"/></svg>ยอดขาย</button>
+  <button class="tab" data-view="buy" aria-pressed="false" type="button"><svg><use href="#i-bag"/></svg>ซื้อของ</button>
+  <button class="tab" data-view="back" aria-pressed="false" type="button"><svg><use href="#i-calplus"/></svg>ลงย้อนหลัง</button>
+</div></nav>
+
+<div class="scrim" id="scrim" hidden></div>
+<section class="sheet" id="setSheet" role="dialog" aria-modal="true" aria-labelledby="setTitle" hidden>
+  <div class="grabber"></div>
+  <div class="sheet-head">
+    <h2 class="sheet-title" id="setTitle">ตั้งค่า</h2>
+    <button class="close-btn" id="setClose" aria-label="ปิด"><svg><use href="#i-x"/></svg></button>
+  </div>
+  <div class="sheet-body">
+    <div class="group">
+      <div class="group-k">บัญชี</div>
+      <div class="acct" id="acct"></div>
+      <div class="mini-row"><button class="mini" id="signOut" type="button">ออกจากระบบ</button></div>
+    </div>
+    <div class="group">
+      <div class="group-k" id="wkK">สัปดาห์เริ่มต้นวัน</div>
+      <div class="seg s2" role="group" aria-labelledby="wkK">
+        <span class="seg-pill" id="wkPill"></span>
+        <button data-wk-opt="0" aria-pressed="false" type="button">อาทิตย์</button>
+        <button data-wk-opt="1" aria-pressed="false" type="button">จันทร์</button>
+      </div>
+      <div class="hint">ใช้กับมุมมอง "สัปดาห์" และลำดับวันในกราฟวันไหนขายดี</div>
+    </div>
+    <div class="group">
+      <div class="group-k">หมวดซื้อของ</div>
+      <div id="catList"></div>
+      <input class="text-in" id="catIn" type="text" maxlength="20" placeholder="ชื่อหมวดใหม่" aria-label="ชื่อหมวดใหม่">
+      <div class="hint" id="catHint">เอาหมวดออกจากตัวเลือกได้ รายการที่เคยบันทึกไว้ยังอยู่ครบ</div>
+      <div class="mini-row"><button class="mini" id="catAdd" type="button">เพิ่มหมวด</button><button class="mini" id="catReset" type="button">คืนค่าเริ่มต้น</button></div>
+    </div>
+    <div class="group">
+      <div class="group-k">รหัสร้าน (ส่งให้พนักงานเพื่อเข้าร่วม)</div>
+      <div class="code-box" id="codeBox">······</div>
+      <div class="mini-row">
+        <button class="mini" id="codeCopy" type="button">คัดลอกรหัส</button>
+        <button class="mini" id="codeNew" type="button">สร้างรหัสใหม่</button>
+      </div>
+      <div class="hint" id="codeHint">มีพนักงานออก? สร้างรหัสใหม่และเอาคนนั้นออกจากรายชื่อด้านล่าง</div>
+    </div>
+    <div class="group">
+      <div class="group-k">สมาชิกในร้าน</div>
+      <div id="memList"></div>
+    </div>
+    <div class="group">
+      <div class="group-k">นำเข้าข้อมูลเก่าจาก Google Sheet</div>
+      <div class="mini-row"><a class="mini" id="importLink" href="./import.html" style="display:inline-flex;align-items:center;text-decoration:none;color:inherit">เปิดหน้านำเข้า</a></div>
+      <div class="hint">ดาวน์โหลดแท็บ "รายการ" เป็น .csv แล้วนำเข้าที่นี่ นำเข้าซ้ำได้ไม่ซ้อนกัน</div>
+    </div>
+    <div class="group">
+      <div class="group-k">ส่งออกข้อมูล</div>
+      <div class="mini-row"><button class="mini" id="csvBtn" type="button">ดาวน์โหลด CSV ของช่วงที่ดูอยู่</button></div>
+      <div class="hint" id="csvHint"></div>
+    </div>
+    <div class="group">
+      <div class="group-k" id="themeK">ธีม</div>
+      <div class="seg" role="group" aria-labelledby="themeK">
+        <span class="seg-pill" id="themePill"></span>
+        <button data-theme-opt="light" aria-pressed="false">สว่าง</button>
+        <button data-theme-opt="dark" aria-pressed="false">มืด</button>
+        <button data-theme-opt="system" aria-pressed="false">ตามระบบ</button>
+      </div>
+    </div>
+    <p class="note">หน้านี้เปิดได้เฉพาะบัญชีเจ้าของร้าน ข้อมูลที่โหลดล่าสุดจะเก็บไว้ในเครื่องนี้ไว้ดูตอนไม่มีอินเทอร์เน็ต</p>
+    <button class="btn" id="setDone">เสร็จสิ้น</button>
   </div>
 </section>
+
+
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -1318,7 +1343,7 @@ document.querySelectorAll("[data-mode]").forEach(function(b){
 });
 $("prevBtn").addEventListener("click", function(){ step(-1); refresh(); });
 $("nextBtn").addEventListener("click", function(){ step(1); refresh(); });
-$("refreshBtn").addEventListener("click", refresh);
+$("refreshBtn").addEventListener("click", function(){ if (tab === "sales") refresh(); else if (tab === "buy"){ loadExp(); loadFixed(); } else loadBack(); });
 
 /* ================= settings ================= */
 /* ---- account / shop code / members / manual entry / export ---- */
@@ -1387,7 +1412,7 @@ $("mAdd").addEventListener("click", function(){
   var t = mk(+p[0], +p[1] - 1, +p[2]).getTime(), id = "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), btn = this;
   btn.disabled = true; mHint("กำลังบันทึก…", true);
   FB.withTimeout(FB.db.doc(FB.path("tx/" + id)).set({t:t, day:ds, a:amt, m:$("mCh").value, uid:FB.ctx.uid, seller:($("mName").value.trim() || "บันทึกเอง").slice(0, 40), status:"ok"}), 15000)
-    .then(function(){ mHint("เพิ่มรายการแล้ว " + baht(amt) + " (" + ds + ")", true); $("mAmt").value = ""; }, function(e){ mHint(FB.errMsg(e)); })
+    .then(function(){ mHint("เพิ่มแล้ว " + baht(amt) + " (" + ds + ")", true); $("mAmt").value = ""; salesChanged = true; loadBack(); }, function(e){ mHint(FB.errMsg(e)); })
     .then(function(){ btn.disabled = false; });
 });
 $("csvBtn").addEventListener("click", function(){
@@ -1443,7 +1468,7 @@ function loadCats(cb){
   }, function(){ if (cb) cb(); });
 }
 function saveCats(list){
-  return FB.withTimeout(FB.db.doc(FB.path("settings/cats")).set({list: list}), 15000).then(function(){ catsStored = list.slice(); expChanged = true; });
+  return FB.withTimeout(FB.db.doc(FB.path("settings/cats")).set({list: list}), 15000).then(function(){ catsStored = list.slice(); renderCats(); });
 }
 function renderCatSettings(){
   var box = $("catList"); if (!box) return; box.textContent = "";
@@ -1620,22 +1645,67 @@ function showTab(t){
 }
 document.querySelectorAll("[data-etab]").forEach(function(b){ b.addEventListener("click", function(){ showTab(b.dataset.etab); }); });
 function openExp(){
-  if (expOpen) return; expOpen = true; expChanged = false;
+  expOpen = true;
   eMonth = mk(TODAY.getFullYear(), TODAY.getMonth(), 1); eNew = false; eCat = catsNow()[0]; eData = [];
   resetEForm(); eHint(""); fHint(""); $("eDate").value = ymd(now()); $("eCatNew").hidden = true; $("eCatNew").value = "";
   monthOpts($("fFrom")); showTab("buy"); renderCats(); loadExp(); loadFixed(); loadCats(function(){ if (catsNow().indexOf(eCat) < 0 && !eEdit) eCat = catsNow()[0]; renderCats(); });
-  $("scrim").hidden = false; $("expSheet").hidden = false;
-  requestAnimationFrame(function(){ requestAnimationFrame(function(){ $("scrim").classList.add("show"); $("expSheet").classList.add("show"); showTab("buy"); }); });
 }
-function closeExp(){
-  if (!expOpen) return; expOpen = false;
-  $("scrim").classList.remove("show"); $("expSheet").classList.remove("show");
-  setTimeout(function(){ if (!expOpen && !isOpen){ $("scrim").hidden = true; } if (!expOpen) $("expSheet").hidden = true; }, 380);
-  if (expChanged) refresh();
+function closeExp(){ expOpen = false; }
+
+/* ---- back-dated sales tab: form + the chosen day's sales with cancel ---- */
+var salesChanged = false, bReq = 0, CHN = {qr:"QR", cash:"เงินสด", thai:"ไทยช่วยไทย"};
+function openBack(){ if (!$("mDate").value) $("mDate").value = ymd(now()); mHint(""); loadBack(); }
+function loadBack(){
+  var ds = $("mDate").value, box = $("bList"), my = ++bReq;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)){ box.textContent = ""; $("bListK").textContent = "รายการขายของวันที่เลือก"; return; }
+  var dd = parse(ds); $("bListK").textContent = "รายการขายของ " + fmtDay(dd) + " " + (dd.getFullYear() + 543);
+  box.textContent = "กำลังโหลด…";
+  FB.withTimeout(FB.db.collection(FB.path("tx")).where("day", "==", ds).get(), 20000).then(function(q){
+    if (my !== bReq) return;
+    var rows = []; q.forEach(function(d){ var v = d.data(); rows.push({id:d.id, t:v.t, a:v.a, m:v.m, seller:v.seller, status:v.status}); });
+    rows.sort(function(a, b){ return a.t - b.t; });
+    box.textContent = "";
+    if (!rows.length){ box.appendChild(h("div", "hint", "ยังไม่มียอดขายในวันนี้")); return; }
+    var total = 0, n = 0; rows.forEach(function(r){ if (r.status === "ok"){ total += r.a; n++; } });
+    var tt = h("div", "pu-total"); tt.appendChild(h("span", "", n + " รายการ รวม")); tt.appendChild(h("b", "num", baht(total))); box.appendChild(tt);
+    rows.forEach(function(r){
+      var t = new Date(r.t), row = h("div", "pu" + (r.status === "ok" ? "" : " void"));
+      row.appendChild(h("span", "dd", pad2(t.getHours()) + ":" + pad2(t.getMinutes())));
+      row.appendChild(h("span", "nn", (r.seller || "ไม่ระบุ") + " · " + (CHN[r.m] || r.m) + (r.status === "ok" ? "" : " · ยกเลิกแล้ว")));
+      row.appendChild(h("span", "aa", baht(r.a)));
+      if (r.status === "ok"){
+        var b = h("button", "mini danger", "ยกเลิก"); b.type = "button";
+        b.addEventListener("click", function(){
+          if (!b.dataset.arm){ b.dataset.arm = "1"; b.textContent = "ยืนยัน"; setTimeout(function(){ delete b.dataset.arm; b.textContent = "ยกเลิก"; }, 2500); return; }
+          b.disabled = true;
+          FB.withTimeout(FB.db.doc(FB.path("tx/" + r.id)).update({status:"void"}), 15000).then(function(){ salesChanged = true; loadBack(); }, function(e){ b.disabled = false; b.textContent = FB.errMsg(e); });
+        });
+        row.appendChild(b);
+      }
+      box.appendChild(row);
+    });
+  }, function(e){ if (my === bReq) box.textContent = FB.errMsg(e); });
 }
-$("openExp").addEventListener("click", function(){ if (FB.ctx) openExp(); });
-$("expClose").addEventListener("click", closeExp); $("expDone").addEventListener("click", closeExp); $("scrim").addEventListener("click", closeExp);
-document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeExp(); });
+$("mDate").addEventListener("change", loadBack);
+
+/* ---- bottom tabs ---- */
+var tab = "sales";
+var TITLES = {sales:"ยอดขายร้าน", buy:"ซื้อของ", back:"ลงยอดขายย้อนหลัง"};
+function showView(t){
+  if (t === tab) return;
+  var prev = tab; tab = t;
+  ["sales", "buy", "back"].forEach(function(k){ $("view" + k.charAt(0).toUpperCase() + k.slice(1)).hidden = k !== t; });
+  document.querySelectorAll("[data-view]").forEach(function(b){ b.setAttribute("aria-pressed", String(b.dataset.view === t)); });
+  document.body.setAttribute("data-tab", t); $("hTitle").textContent = TITLES[t];
+  if (prev === "buy") closeExp();
+  if (t === "buy") openExp();
+  if (t === "back") openBack();
+  if (t === "sales" && (salesChanged || expChanged)){ salesChanged = false; expChanged = false; refresh(); }
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("[data-view]").forEach(function(b){ b.addEventListener("click", function(){ if (FB.ctx) showView(b.dataset.view); }); });
+document.addEventListener("focusin", function(e){ var n = e.target && e.target.tagName; if (n === "INPUT" || n === "SELECT" || n === "TEXTAREA") document.body.classList.add("kb"); });
+document.addEventListener("focusout", function(){ setTimeout(function(){ var n = document.activeElement && document.activeElement.tagName; if (n !== "INPUT" && n !== "SELECT" && n !== "TEXTAREA") document.body.classList.remove("kb"); }, 120); });
 
 /* ================= theme ================= */
 var mql = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
@@ -1689,7 +1759,7 @@ function makeIcon(size){
 
 /* ================= boot ================= */
 document.addEventListener("visibilitychange", function(){
-  if (document.hidden || isOpen || expOpen || !FB.ctx) return;
+  if (document.hidden || isOpen || tab !== "sales" || !FB.ctx) return;
   var n = now(); if (ymd(n) !== ymd(TODAY)){ var w0 = windowInfo(), wasNow = w0.from <= TODAY && TODAY <= w0.to; TODAY = n; if (wasNow) anchor = n; }
   refresh();
 });
