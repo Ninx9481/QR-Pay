@@ -950,7 +950,7 @@ function getRange(from, to, gran){
     var hrs = [], mons = [];
     for (i = 0; i < 24; i++) hrs.push(blank({h:i}));
     for (i = 0; i < 12; i++) mons.push(blank({}));
-    var by = {};
+    var by = {}, txs = [];
     q.forEach(function(doc){
       var v = doc.data(); if (v.status !== "ok") return;
       var di = idx[v.day]; if (di === undefined) return;
@@ -958,6 +958,7 @@ function getRange(from, to, gran){
       if (gran === "h") addTo(hrs[new Date(v.t).getHours()], v);
       if (gran === "m") addTo(mons[+v.day.slice(5, 7) - 1], v);
       var mm = memMap && memMap[v.uid], isS = mm && mm.role === "seller", n = isS ? "u:" + v.uid : "n:" + (v.seller || "ไม่ระบุ");
+      if (gran === "h") txs.push({t: v.t, a: v.a, m: v.m, name: isS ? mm.name : (v.seller || "ไม่ระบุ")});
       var b = by[n] || (by[n] = {name: isS ? mm.name : (v.seller || "ไม่ระบุ"), total:0, count:0, cash:0, thai:0});
       b.total += v.a; b.count++; if (v.m === "cash") b.cash += v.a; if (v.m === "thai") b.thai += v.a;
     });
@@ -985,7 +986,8 @@ function getRange(from, to, gran){
       items = daily;
     }
     var sellers = Object.keys(by).map(function(k){ return by[k]; }).sort(function(a, b){ return b.total - a.total; });
-    return {ok:true, days:items, daily:daily, sellers:sellers};
+    txs.sort(function(a, b){ return b.t - a.t; });
+    return {ok:true, days:items, daily:daily, sellers:sellers, txs:txs};
   });
 }
 function isNow(d){
@@ -1038,14 +1040,29 @@ function paint(res, prevRes, w, meta, extra){
     e.appendChild(document.createTextNode(mode === "m" ? "ลองกดลูกศรเพื่อดูเดือนอื่น" : mode === "y" ? "ลองกดลูกศรเพื่อดูปีอื่น" : "ลองกดลูกศรเพื่อดูช่วงก่อนหน้า"));
     col.appendChild(e); var pe = renderPurchases(w); if (pe) col.appendChild(pe); body.appendChild(col); return;
   }
-  col.appendChild(renderChartCard(res.days, S));
-  col.appendChild(renderBest(S));
+  if (w.gran === "h"){ col.appendChild(renderTxList(res.txs || [])); }
+  else { col.appendChild(renderChartCard(res.days, S)); col.appendChild(renderBest(S)); }
   col.appendChild(renderSplit(S));
   if ((mode === "m" || mode === "y") && res.daily){ var wkc = renderWeekday(res.daily); if (wkc) col.appendChild(wkc); }
   if (res.sellers && res.sellers.length) col.appendChild(renderSellers(res.sellers));
   var pu = renderPurchases(w); if (pu) col.appendChild(pu);
   body.appendChild(col);
   selectCol(S.best ? res.days.indexOf(res.days.filter(function(d){ return d.date === S.best.date; })[0]) : -1);
+}
+
+var CHN2 = {qr:"QR", cash:"เงินสด", thai:"ไทยช่วยไทย"};
+function renderTxList(txs){
+  var c = h("section", "card"); c.appendChild(h("h2", "", "รายการขายทั้งหมด"));
+  var tt = h("div", "pu-total"); tt.appendChild(h("span", "", txs.length + " รายการ (ใหม่สุดอยู่บน)")); c.appendChild(tt);
+  if (!txs.length){ c.appendChild(h("div", "sub", "ยังไม่มีรายการขายในวันนี้")); return c; }
+  txs.forEach(function(r){
+    var t = new Date(r.t), row = h("div", "pu");
+    row.appendChild(h("span", "dd", pad2(t.getHours()) + ":" + pad2(t.getMinutes())));
+    row.appendChild(h("span", "nn", r.name + " · " + (CHN2[r.m] || r.m)));
+    row.appendChild(h("span", "aa", baht(r.a)));
+    c.appendChild(row);
+  });
+  return c;
 }
 
 function renderBanner(){
@@ -1184,6 +1201,11 @@ function selectCol(i){
     var s = h("span"); s.appendChild(h("i", "key " + x[0])); s.appendChild(document.createTextNode(x[1] + " ")); s.appendChild(h("b", "", baht(x[2]))); r2.appendChild(s);
   });
   r2.appendChild(h("span", "", d.count + " รายการ")); ro.appendChild(r2);
+  if (ctx.w.gran !== "h" && d.count){
+    var go = h("button", "mini", ctx.w.gran === "m" ? "ดูเดือนนี้" : "ดูรายการขายของวันนี้"); go.type = "button"; go.style.marginTop = "10px";
+    go.addEventListener("click", function(){ anchor = parse(d.start); mode = ctx.w.gran === "m" ? "m" : "d"; save(K.mode, mode); refresh(); window.scrollTo(0, 0); });
+    ro.appendChild(go);
+  }
 }
 
 function renderTable(days){
@@ -1344,7 +1366,7 @@ function refresh(){
   var my = ++reqId, w = windowInfo();
   syncControls(w);
   $("stage").classList.add("loading"); $("refreshBtn").classList.add("spin");
-  var key = "r4|" + FB.ctx.shopId + "|" + w.gran + "|" + ymd(w.from) + "|" + ymd(w.to);
+  var key = "r5|" + FB.ctx.shopId + "|" + w.gran + "|" + ymd(w.from) + "|" + ymd(w.to);
   var done = function(){ if (my !== reqId) return false; $("stage").classList.remove("loading"); $("refreshBtn").classList.remove("spin"); return true; };
   Promise.all([getRange(w.from, w.to, w.gran), w.pfrom ? getRange(w.pfrom, w.pto, w.gran).catch(function(){ return null; }) : Promise.resolve(null), getExtra(w)]).then(function(r){
     if (!done()) return;
