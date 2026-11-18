@@ -63,6 +63,13 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
 .today-amt .cur{color:var(--accent)}
 .today-count{font-size:13px;color:var(--muted);font-weight:500;margin-left:6px}
 .icons{display:flex;gap:8px;flex:none}
+.shopbar{display:flex;gap:6px;padding:5px;margin:8px 0 0;background:var(--surface-2);border-radius:18px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:none;scrollbar-width:none}
+.shopbar::-webkit-scrollbar{display:none}
+.shopbar[hidden]{display:none}
+.shopbar button{flex:1 0 auto;min-width:96px;max-width:70%;height:46px;padding:0 16px;border-radius:13px;font-size:16px;font-weight:650;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .15s,color .15s}
+.shopbar button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.14)}
+.qr-shop{font-size:18px;font-weight:700;text-align:center;color:var(--accent);margin-bottom:2px}
+.qr-shop[hidden]{display:none}
 .icon-btn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--surface);
   border:1px solid var(--line);color:var(--fg);transition:transform .12s ease,background-color .2s}
 .icon-btn:active{transform:scale(.93)}
@@ -285,6 +292,7 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
       <button class="icon-btn" id="openSettings" aria-label="ตั้งค่า"><svg><use href="#i-gear"/></svg></button>
     </div>
   </header>
+  <nav class="shopbar" id="shopBar" hidden aria-label="เลือกร้านที่จะขาย"></nav>
 
   <section class="stage">
     <div class="stage-label">ใส่จำนวนเงิน</div>
@@ -310,6 +318,7 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
 <section class="sheet qr-sheet" id="qrSheet" role="dialog" aria-modal="true" aria-labelledby="qrTitle" hidden>
   <div class="grabber"></div>
   <div class="sheet-body">
+    <div class="qr-shop" id="qrShop" hidden></div>
     <div class="qr-tag" id="qrTitle">Thai QR Payment</div>
     <div class="qr-amount num"><span class="cur">฿</span><span id="qrAmount">0.00</span></div>
     <div class="qr-card"><canvas id="qrCanvas" width="600" height="600" aria-label="PromptPay QR Code"></canvas></div>
@@ -368,7 +377,12 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
     <div class="group">
       <div class="group-k">บัญชี</div>
       <div class="acct" id="acct"></div>
-      <div class="mini-row"><button class="mini" id="signOut" type="button">ออกจากระบบ</button></div>
+      <div class="mini-row"><button class="mini" id="signOut" type="button">ออกจากระบบ</button><button class="mini" id="addShopBtn" type="button">เพิ่มร้านอีกร้าน</button></div>
+      <div class="group" id="addShopBox" hidden>
+        <input class="text-in" id="addShopCode" type="text" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="รหัสร้านที่ได้จากเจ้าของ" style="text-transform:uppercase;letter-spacing:.1em">
+        <div class="mini-row"><button class="mini" id="addShopGo" type="button">เข้าร่วมร้านนี้</button></div>
+        <div class="hint" id="addShopHint"></div>
+      </div>
     </div>
     <div class="group">
       <label class="group-k" for="ppId">เบอร์พร้อมเพย์ที่รับเงิน</label>
@@ -583,7 +597,13 @@ function randCode(){
   for (var i = 0; i < 6; i++) out += CHARS.charAt(a[i] % CHARS.length);
   return out;
 }
-function putPointer(uid, shopId, role){ return db.doc("users/" + uid).set({shopId:shopId, role:role}); }
+function putPointer(uid, shopId, role){
+  return db.doc("users/" + uid).get().then(function(s){
+    var d = s.exists ? s.data() : {}, list = Array.isArray(d.shops) ? d.shops.slice() : (d.shopId ? [d.shopId] : []);
+    if (list.indexOf(shopId) < 0) list.push(shopId);
+    return db.doc("users/" + uid).set({shopId:shopId, role:role, shops:list});
+  });
+}
 
 function createShop(user, name, shopName){
   shopName = (shopName || "").trim();
@@ -601,7 +621,8 @@ function createShop(user, name, shopName){
       return tryCode(6);
     })
     .then(function(code){ return db.doc("shops/" + shopId + "/secrets/join").set({code:code}); })
-    .then(function(){ return putPointer(uid, shopId, "owner"); });
+    .then(function(){ return putPointer(uid, shopId, "owner"); })
+    .then(function(){ return shopId; });
 }
 
 function joinShop(user, name, code){
@@ -609,40 +630,80 @@ function joinShop(user, name, code){
   if (code.length < 6){ var e = new Error("x"); e.say = "กรุณาใส่รหัสร้านให้ครบ"; return Promise.reject(e); }
   return db.doc("codes/" + code).get().then(function(snap){
     if (!snap.exists){ var e2 = new Error("x"); e2.say = "ไม่พบรหัสร้านนี้ ตรวจตัวอักษรอีกครั้ง"; throw e2; }
-    var shopId = snap.data().shopId;
-    return db.doc("shops/" + shopId + "/members/" + user.uid).set({role:"seller", name:name, email:user.email || "", code:code})
-      .then(function(){ return putPointer(user.uid, shopId, "seller"); }, function(err){
-        if (err && err.code === "permission-denied"){ var e3 = new Error("x"); e3.say = "รหัสร้านไม่ถูกต้อง หรือถูกเปลี่ยนแล้ว ขอรหัสใหม่จากเจ้าของ"; throw e3; }
-        throw err;
-      });
+    var shopId = snap.data().shopId, mref = db.doc("shops/" + shopId + "/members/" + user.uid);
+    return mref.get().then(function(ms){
+      if (ms.exists) return putPointer(user.uid, shopId, ms.data().role);          // already in this shop: just link it
+      return mref.set({role:"seller", name:name, email:user.email || "", code:code})
+        .then(function(){ return putPointer(user.uid, shopId, "seller"); }, function(err){
+          if (err && err.code === "permission-denied"){ var e3 = new Error("x"); e3.say = "รหัสร้านไม่ถูกต้อง หรือถูกเปลี่ยนแล้ว ขอรหัสใหม่จากเจ้าของ"; throw e3; }
+          throw err;
+        });
+    }, function(err){
+      if (err && err.code === "permission-denied"){   // reading a member doc that does not exist is denied for non-owners -> treat as "not a member yet"
+        return db.doc("shops/" + shopId + "/members/" + user.uid).set({role:"seller", name:name, email:user.email || "", code:code})
+          .then(function(){ return putPointer(user.uid, shopId, "seller"); }, function(err2){
+            if (err2 && err2.code === "permission-denied"){ var e4 = new Error("x"); e4.say = "รหัสร้านไม่ถูกต้อง หรือถูกเปลี่ยนแล้ว ขอรหัสใหม่จากเจ้าของ"; throw e4; }
+            throw err2;
+          });
+      }
+      throw err;
+    }).then(function(){ return shopId; });
   });
 }
 
-/* ---------- resolve user -> shop membership ---------- */
+/* ---------- resolve user -> shop memberships (one account can belong to several shops) ---------- */
+function activeKey(uid){ return "q2.active." + need + "." + uid; }
+function ctxOf(user, e){ return {uid:user.uid, email:user.email || "", name:e.name, role:e.role, shopId:e.shopId, shopName:e.shopName || "", promptpay:e.promptpay || ""}; }
 function done(ctx){
   FB.ctx = ctx; lsSet("q2.ctx." + ctx.uid, ctx);
   if (need === "owner" && ctx.role !== "owner"){ viewDenied({email:ctx.email}); return; }
   hideGate(); if (onReady){ var f = onReady; onReady = null; f(ctx); }
 }
+function finish(user, entries, hint){
+  var usable = need === "owner" ? entries.filter(function(e){ return e.role === "owner"; }) : entries;
+  if (!usable.length){ FB.shops = []; return done(ctxOf(user, entries[0])); }     // owner page, but no shop where this account is an owner
+  var want = lsGet(activeKey(user.uid)), act = null, i;
+  for (i = 0; i < usable.length; i++) if (usable[i].shopId === want) act = usable[i];
+  if (!act) for (i = 0; i < usable.length; i++) if (usable[i].shopId === hint) act = usable[i];
+  if (!act) act = usable[0];
+  FB.shops = usable; lsSet(activeKey(user.uid), act.shopId);
+  done(ctxOf(user, act));
+}
+function loadEntry(uid, shopId){
+  return withTimeout(db.doc("shops/" + shopId + "/members/" + uid).get(), 9000).then(function(ms){
+    if (!ms.exists) return null;
+    var m = ms.data();
+    return withTimeout(db.doc("shops/" + shopId).get(), 9000).then(function(ss){
+      var sd = ss.exists ? ss.data() : {};
+      return {shopId:shopId, shopName:sd.name || "", role:m.role, name:m.name, promptpay:sd.promptpay || ""};
+    });
+  });
+}
 function resolve(user){
   viewLoading("กำลังตรวจสอบบัญชี…");
-  var cached = lsGet("q2.ctx." + user.uid);
   withTimeout(db.doc("users/" + user.uid).get(), 9000).then(function(ps){
     if (!ps.exists) return viewOnboard(user);
-    var shopId = ps.data().shopId;
-    return withTimeout(db.doc("shops/" + shopId + "/members/" + user.uid).get(), 9000).then(function(ms){
-      if (!ms.exists){
-        lsDel("q2.ctx." + user.uid);
+    var d = ps.data(), ids = Array.isArray(d.shops) && d.shops.length ? d.shops.slice() : [];
+    if (d.shopId && ids.indexOf(d.shopId) < 0) ids.push(d.shopId);
+    return Promise.all(ids.map(function(id){ return loadEntry(user.uid, id); })).then(function(all){
+      var entries = all.filter(Boolean);
+      if (!entries.length){
+        lsDel("q2.ctx." + user.uid); lsDel("q2.shops." + user.uid);
         return viewOnboard(user, "บัญชีนี้ไม่ได้อยู่ในร้านแล้ว ใส่รหัสร้านใหม่เพื่อเข้าร่วมอีกครั้ง");
       }
-      var m = ms.data();
-      return withTimeout(db.doc("shops/" + shopId).get(), 9000).then(function(ss){
-        var sd = ss.exists ? ss.data() : {};
-        done({uid:user.uid, email:user.email || "", name:m.name, role:m.role, shopId:shopId, shopName:sd.name || "", promptpay:sd.promptpay || ""});
-      });
+      lsSet("q2.shops." + user.uid, entries);
+      var keep = entries.map(function(e){ return e.shopId; });
+      if (!Array.isArray(d.shops) || keep.length !== ids.length){     // migrate the old single pointer / drop shops this account left
+        var head = keep.indexOf(d.shopId) >= 0 ? d.shopId : keep[0], hr = entries.filter(function(e){ return e.shopId === head; })[0].role;
+        db.doc("users/" + user.uid).set({shopId:head, role:hr, shops:keep}).catch(function(){});
+      }
+      finish(user, entries, d.shopId);
     });
   }).catch(function(e){
-    if (isNet(e) && cached && cached.uid === user.uid){ FB.offlineCtx = true; done(cached); return; }
+    var cached = lsGet("q2.shops." + user.uid), oldCtx = lsGet("q2.ctx." + user.uid);
+    if (isNet(e) && ((cached && cached.length) || (oldCtx && oldCtx.uid === user.uid))){
+      FB.offlineCtx = true; finish(user, (cached && cached.length) ? cached : [oldCtx], oldCtx && oldCtx.shopId); return;
+    }
     if (isNet(e)) return viewError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ต้องมีอินเทอร์เน็ตในการเข้าสู่ระบบครั้งแรก", function(){ resolve(user); });
     viewError(errMsg(e), function(){ resolve(user); });
   });
@@ -667,7 +728,7 @@ FB.start = function(which, cb){
 };
 FB.signOut = function(){
   var uid = FB.ctx && FB.ctx.uid;
-  (auth ? auth.signOut() : Promise.resolve()).catch(function(){}).then(function(){ if (uid) lsDel("q2.ctx." + uid); location.reload(); });
+  (auth ? auth.signOut() : Promise.resolve()).catch(function(){}).then(function(){ if (uid){ lsDel("q2.ctx." + uid); lsDel("q2.shops." + uid); } location.reload(); });
 };
 FB.errMsg = errMsg;
 FB.isNet = isNet;
@@ -676,21 +737,38 @@ FB.path = function(p){ return "shops/" + FB.ctx.shopId + (p ? "/" + p : ""); };
 
 /* cashier writes — doc id = tx id, so retries are idempotent */
 FB.putTx = function(tx){
-  var c = FB.ctx, ref = db.doc(FB.path("tx/" + tx.id));
-  return withTimeout(ref.set({t:tx.t, day:tx.day, a:tx.a, m:tx.m, uid:c.uid, seller:c.name, status:"ok"}), 15000).catch(function(e){
+  var c = FB.ctx, ref = db.doc("shops/" + (tx.shop || c.shopId) + "/tx/" + tx.id);
+  return withTimeout(ref.set({t:tx.t, day:tx.day, a:tx.a, m:tx.m, uid:c.uid, seller:(tx.s || c.name).slice(0, 40), status:"ok"}), 15000).catch(function(e){
     // a retry of a write that already landed is an "update" and is denied by the rules -> treat as done
     if (e && e.code === "permission-denied") return withTimeout(ref.get(), 10000).then(function(s){ if (!s.exists) throw e; });
     throw e;
   });
 };
-FB.voidTx = function(id){
-  var ref = db.doc(FB.path("tx/" + id));
+FB.voidTx = function(id, shop){
+  var ref = db.doc("shops/" + (shop || FB.ctx.shopId) + "/tx/" + id);
   return withTimeout(ref.update({status:"void"}), 15000).catch(function(e){
     if (e && e.code === "not-found") return;
     if (e && e.code === "permission-denied") return withTimeout(ref.get(), 10000).then(function(s){ if (!(s.exists && s.data().status === "void")) throw e; });
     throw e;
   });
 };
+
+/* several shops per account */
+FB.switchShop = function(id){
+  var c = FB.ctx, e = (FB.shops || []).filter(function(s){ return s.shopId === id; })[0];
+  if (!c || !e || id === c.shopId) return;
+  lsSet(activeKey(c.uid), id);
+  withTimeout(db.doc("users/" + c.uid).update({shopId:id, role:e.role}).catch(function(){}), 3000).catch(function(){}).then(function(){ location.reload(); });
+};
+FB.addShop = function(code){
+  var c = FB.ctx;
+  return joinShop({uid:c.uid, email:c.email}, c.name, code).then(function(shopId){ lsSet(activeKey(c.uid), shopId); location.reload(); });
+};
+FB.createNewShop = function(shopName){
+  var c = FB.ctx;
+  return createShop({uid:c.uid, email:c.email}, c.name, shopName).then(function(shopId){ lsSet(activeKey(c.uid), shopId); location.reload(); });
+};
+FB.setMemberRole = function(uid, role){ return db.doc(FB.path("members/" + uid)).update({role:role}); };
 
 /* owner tools */
 FB.setPromptpay = function(digits){
@@ -722,6 +800,14 @@ FB.members = function(){
   });
 };
 FB.removeMember = function(uid){ return db.doc(FB.path("members/" + uid)).delete(); };
+FB.renameMember = function(uid, name){
+  return db.doc(FB.path("members/" + uid)).update({name:name}).then(function(){
+    if (FB.ctx && FB.ctx.uid === uid){
+      FB.ctx.name = name; lsSet("q2.ctx." + uid, FB.ctx);
+      try{ if (auth.currentUser) auth.currentUser.updateProfile({displayName:name}).catch(function(){}); }catch(e){}
+    }
+  });
+};
 })();
 </script>
 <script>/* QR Code Generator for JavaScript — Copyright (c) 2009 Kazuhiko Arase — MIT License */
@@ -732,6 +818,25 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 /* ================= storage ================= */
 var K = {id:"q2.id", theme:"q2.theme", tx:"q2.tx", outbox:"q2.outbox"};
 function load(k, d){ try{ var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }catch(e){ return d; } }
+/* one account can sell for several shops: history and PromptPay id are kept per shop */
+function adoptLegacy(sid){
+  [["q2.tx", "q2.tx."], ["q2.id", "q2.id."]].forEach(function(p){
+    try{ var old = localStorage.getItem(p[0]); if (old !== null && localStorage.getItem(p[1] + sid) === null){ localStorage.setItem(p[1] + sid, old); localStorage.removeItem(p[0]); } }catch(e){}
+  });
+}
+function multiShop(){ return !!(FB.shops && FB.shops.length > 1); }
+function renderShopBar(){
+  var bar = $("shopBar"); bar.textContent = "";
+  if (!multiShop()){ bar.hidden = true; return; }
+  FB.shops.forEach(function(sh){
+    var b = document.createElement("button"); b.type = "button"; b.textContent = sh.shopName || "ร้าน";
+    b.setAttribute("aria-pressed", String(sh.shopId === FB.ctx.shopId));
+    b.addEventListener("click", function(){ if (sh.shopId !== FB.ctx.shopId) FB.switchShop(sh.shopId); });
+    bar.appendChild(b);
+  });
+  bar.hidden = false;
+  var on = bar.querySelector('[aria-pressed="true"]'); if (on && on.scrollIntoView){ try{ on.scrollIntoView({inline:"center", block:"nearest"}); }catch(e){} }
+}
 function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 
 /* ================= EMVCo PromptPay ================= */
@@ -955,6 +1060,7 @@ function generate(){
   if (!id){ openSheet("setSheet"); setTimeout(function(){ $("ppId").focus(); }, 350); return; }
   var payload = promptPayPayload(id.digits, currentSatang);
   pending = {a:currentSatang, p:payload};
+  $("qrShop").hidden = !multiShop(); if (multiShop()) $("qrShop").textContent = "ร้าน " + (FB.ctx.shopName || "");
   $("qrAmount").textContent = money(currentSatang);
   $("qrPayee").textContent = maskId(id);
   drawQr(payload);
@@ -986,11 +1092,11 @@ $("thaiBtn").addEventListener("click", function(){
 function recordSale(amount, method){
   var now = Date.now(), tx = {id: now.toString(36) + Math.random().toString(36).slice(2, 8), t: now, a: amount, s: sellerName(), m: method, day: dayKey(now)};
   txs.push(tx); save(K.tx, txs);
-  queueOp({type:"add", id:tx.id, t:tx.t, a:tx.a, m:method, day:tx.day});
+  queueOp({type:"add", id:tx.id, t:tx.t, a:tx.a, m:method, day:tx.day, shop:FB.ctx.shopId, s:tx.s});
   try{ navigator.vibrate && navigator.vibrate(12); }catch(e){}
   resetAmount(); renderHeader();
   amountEl.focus({preventScroll:true});
-  showToast("บันทึก" + (method === "cash" ? "เงินสด" : method === "thai" ? "ไทยช่วยไทย" : method === "card" ? "บัตรเครดิต" : "") + " ฿" + money(tx.a) + " แล้ว", function(){ removeTx(tx.id); });
+  showToast("บันทึก" + (method === "cash" ? "เงินสด" : method === "thai" ? "ไทยช่วยไทย" : method === "card" ? "บัตรเครดิต" : "") + " ฿" + money(tx.a) + " แล้ว" + (multiShop() ? " · " + FB.ctx.shopName : ""), function(){ removeTx(tx.id); });
   flush();
 }
 function requestWake(){ try{ if (navigator.wakeLock) navigator.wakeLock.request("screen").then(function(l){ wakeLock = l; }).catch(function(){}); }catch(e){} }
@@ -1141,6 +1247,13 @@ $("setDone").addEventListener("click", function(){
   closeTop(true);
 });
 
+/* --- add another shop to this account --- */
+$("addShopBtn").addEventListener("click", function(){ var b = $("addShopBox"); b.hidden = !b.hidden; if (!b.hidden) setTimeout(function(){ $("addShopCode").focus(); }, 50); });
+$("addShopGo").addEventListener("click", function(){
+  var btn = this, hint = $("addShopHint"); hint.className = "hint"; hint.textContent = "กำลังเข้าร่วม…"; btn.disabled = true;
+  FB.addShop($("addShopCode").value).catch(function(e){ btn.disabled = false; hint.className = "hint bad"; hint.textContent = e && e.say || FB.errMsg(e); });
+});
+
 /* --- account --- */
 $("signOut").addEventListener("click", function(){ FB.signOut(); });
 function renderAccount(){
@@ -1160,7 +1273,7 @@ function pendingCount(){ return outbox.length; }
 function queueOp(op){ outbox.push(op); save(K.outbox, outbox); renderSync(); }
 function removeTx(id){
   txs = txs.filter(function(x){ return x.id !== id; }); save(K.tx, txs);
-  queueOp({type:"void", id:id});   // always queued after its "add", so the server ends in a consistent state
+  queueOp({type:"void", id:id, shop:FB.ctx.shopId});   // always queued after its "add", so the server ends in a consistent state
   renderHeader(); renderSync(); flush();
 }
 function flush(){
@@ -1168,15 +1281,20 @@ function flush(){
   if (syncing) return syncing;
   if (navigator.onLine === false){ renderSync(); return Promise.resolve(); }
   renderSync(true);
+  var blocked = {};
   function next(){
-    var op = outbox[0]; if (!op) return Promise.resolve();
-    var p = op.type === "add" ? FB.putTx(op) : FB.voidTx(op.id);
+    var op = null, i; for (i = 0; i < outbox.length; i++){ if (!blocked[outbox[i].shop]){ op = outbox[i]; break; } }
+    if (!op) return Promise.resolve();
+    var p = op.type === "add" ? FB.putTx(op) : FB.voidTx(op.id, op.shop);
     return p.then(function(){
       outbox = outbox.filter(function(o){ return !(o.type === op.type && o.id === op.id); });
       save(K.outbox, outbox); return next();
+    }, function(e){
+      if (e && e.code === "permission-denied"){ blocked[op.shop] = true; return next(); }   // this shop refuses (e.g. left the shop): keep sending the others
+      throw e;
     });
   }
-  syncing = next().then(function(){ lastSyncFailed = false; lastErr = ""; }, function(e){ lastSyncFailed = true; lastErr = e && e.code || ""; })
+  syncing = next().then(function(){ var any = Object.keys(blocked).length > 0; lastSyncFailed = any; lastErr = any ? "permission-denied" : ""; }, function(e){ lastSyncFailed = true; lastErr = e && e.code || ""; })
     .then(function(){ syncing = null; renderSync(); });
   return syncing;
 }
@@ -1243,7 +1361,12 @@ window.addEventListener("resize", function(){ fitAmount(amountEl.value || "0"); 
 /* ================= boot ================= */
 applyTheme();
 FB.start("seller", function(){
+  var sid = FB.ctx.shopId;
+  adoptLegacy(sid); K.tx = "q2.tx." + sid; K.id = "q2.id." + sid;
+  txs = load(K.tx, []); if (!Array.isArray(txs)) txs = [];
+  outbox.forEach(function(o){ if (!o.shop) o.shop = sid; }); save(K.outbox, outbox);      // queued before multi-shop: they belong to the shop this account was in
   if (FB.ctx.promptpay) save(K.id, FB.ctx.promptpay);
+  renderShopBar();
   renderHeader(); renderPayee(); onAmountInput(); renderSync(); flush();
   setTimeout(function(){ try{ amountEl.focus({preventScroll:true}); }catch(e){} }, 60);
 });

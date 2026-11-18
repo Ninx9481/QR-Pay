@@ -280,6 +280,15 @@ html body{min-height:100%;height:auto;overflow-y:visible;display:block;overscrol
 .pu-total b{color:var(--fg)}
 .mem .nm{white-space:normal;overflow:visible}
 .mem .mini{height:34px;padding:0 10px;font-size:13px;flex:none}
+.mem{flex-wrap:wrap}.mem .act{flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 2px}
+.confirm-box{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5;margin:0 0 10px}
+.confirm-box .hint:empty{display:none}
+.confirm-box .mini{background:var(--surface-2)}
+.shopbar{display:flex;gap:6px;padding:5px;margin:0;background:var(--surface-2);border-radius:18px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.shopbar::-webkit-scrollbar{display:none}
+.shopbar[hidden]{display:none}
+.shopbar button{flex:1 0 auto;min-width:96px;max-width:70%;height:44px;padding:0 16px;border-radius:13px;font-size:16px;font-weight:650;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shopbar button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.14)}
 .fedit{display:flex;flex-direction:column;gap:8px;padding:6px 0 10px}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
 
@@ -323,6 +332,7 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
       <button class="icon-btn" id="openSettings" aria-label="ตั้งค่า"><svg><use href="#i-gear"/></svg></button>
     </div>
   </header>
+  <nav class="shopbar" id="shopBar" hidden aria-label="เลือกร้าน"></nav>
 
   <div class="banner" id="banner" hidden></div>
 
@@ -451,7 +461,12 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;min-width:0}
     <div class="group">
       <div class="group-k">บัญชี</div>
       <div class="acct" id="acct"></div>
-      <div class="mini-row"><button class="mini" id="signOut" type="button">ออกจากระบบ</button></div>
+      <div class="mini-row"><button class="mini" id="signOut" type="button">ออกจากระบบ</button><button class="mini" id="newShopBtn" type="button">สร้างร้านใหม่</button></div>
+      <div class="group" id="newShopBox" hidden>
+        <input class="text-in" id="newShopName" type="text" maxlength="60" placeholder="ชื่อร้านใหม่" aria-label="ชื่อร้านใหม่">
+        <div class="mini-row"><button class="mini" id="newShopGo" type="button">สร้างร้าน</button></div>
+        <div class="hint" id="newShopHint">คุณจะเป็นเจ้าของร้านใหม่นี้ ร้านเดิมยังอยู่ครบ สลับร้านได้จากแถบด้านบน</div>
+      </div>
     </div>
     <div class="group">
       <div class="group-k" id="wkK">สัปดาห์เริ่มต้นวัน</div>
@@ -689,7 +704,13 @@ function randCode(){
   for (var i = 0; i < 6; i++) out += CHARS.charAt(a[i] % CHARS.length);
   return out;
 }
-function putPointer(uid, shopId, role){ return db.doc("users/" + uid).set({shopId:shopId, role:role}); }
+function putPointer(uid, shopId, role){
+  return db.doc("users/" + uid).get().then(function(s){
+    var d = s.exists ? s.data() : {}, list = Array.isArray(d.shops) ? d.shops.slice() : (d.shopId ? [d.shopId] : []);
+    if (list.indexOf(shopId) < 0) list.push(shopId);
+    return db.doc("users/" + uid).set({shopId:shopId, role:role, shops:list});
+  });
+}
 
 function createShop(user, name, shopName){
   shopName = (shopName || "").trim();
@@ -707,7 +728,8 @@ function createShop(user, name, shopName){
       return tryCode(6);
     })
     .then(function(code){ return db.doc("shops/" + shopId + "/secrets/join").set({code:code}); })
-    .then(function(){ return putPointer(uid, shopId, "owner"); });
+    .then(function(){ return putPointer(uid, shopId, "owner"); })
+    .then(function(){ return shopId; });
 }
 
 function joinShop(user, name, code){
@@ -715,40 +737,80 @@ function joinShop(user, name, code){
   if (code.length < 6){ var e = new Error("x"); e.say = "กรุณาใส่รหัสร้านให้ครบ"; return Promise.reject(e); }
   return db.doc("codes/" + code).get().then(function(snap){
     if (!snap.exists){ var e2 = new Error("x"); e2.say = "ไม่พบรหัสร้านนี้ ตรวจตัวอักษรอีกครั้ง"; throw e2; }
-    var shopId = snap.data().shopId;
-    return db.doc("shops/" + shopId + "/members/" + user.uid).set({role:"seller", name:name, email:user.email || "", code:code})
-      .then(function(){ return putPointer(user.uid, shopId, "seller"); }, function(err){
-        if (err && err.code === "permission-denied"){ var e3 = new Error("x"); e3.say = "รหัสร้านไม่ถูกต้อง หรือถูกเปลี่ยนแล้ว ขอรหัสใหม่จากเจ้าของ"; throw e3; }
-        throw err;
-      });
+    var shopId = snap.data().shopId, mref = db.doc("shops/" + shopId + "/members/" + user.uid);
+    return mref.get().then(function(ms){
+      if (ms.exists) return putPointer(user.uid, shopId, ms.data().role);          // already in this shop: just link it
+      return mref.set({role:"seller", name:name, email:user.email || "", code:code})
+        .then(function(){ return putPointer(user.uid, shopId, "seller"); }, function(err){
+          if (err && err.code === "permission-denied"){ var e3 = new Error("x"); e3.say = "รหัสร้านไม่ถูกต้อง หรือถูกเปลี่ยนแล้ว ขอรหัสใหม่จากเจ้าของ"; throw e3; }
+          throw err;
+        });
+    }, function(err){
+      if (err && err.code === "permission-denied"){   // reading a member doc that does not exist is denied for non-owners -> treat as "not a member yet"
+        return db.doc("shops/" + shopId + "/members/" + user.uid).set({role:"seller", name:name, email:user.email || "", code:code})
+          .then(function(){ return putPointer(user.uid, shopId, "seller"); }, function(err2){
+            if (err2 && err2.code === "permission-denied"){ var e4 = new Error("x"); e4.say = "รหัสร้านไม่ถูกต้อง หรือถูกเปลี่ยนแล้ว ขอรหัสใหม่จากเจ้าของ"; throw e4; }
+            throw err2;
+          });
+      }
+      throw err;
+    }).then(function(){ return shopId; });
   });
 }
 
-/* ---------- resolve user -> shop membership ---------- */
+/* ---------- resolve user -> shop memberships (one account can belong to several shops) ---------- */
+function activeKey(uid){ return "q2.active." + need + "." + uid; }
+function ctxOf(user, e){ return {uid:user.uid, email:user.email || "", name:e.name, role:e.role, shopId:e.shopId, shopName:e.shopName || "", promptpay:e.promptpay || ""}; }
 function done(ctx){
   FB.ctx = ctx; lsSet("q2.ctx." + ctx.uid, ctx);
   if (need === "owner" && ctx.role !== "owner"){ viewDenied({email:ctx.email}); return; }
   hideGate(); if (onReady){ var f = onReady; onReady = null; f(ctx); }
 }
+function finish(user, entries, hint){
+  var usable = need === "owner" ? entries.filter(function(e){ return e.role === "owner"; }) : entries;
+  if (!usable.length){ FB.shops = []; return done(ctxOf(user, entries[0])); }     // owner page, but no shop where this account is an owner
+  var want = lsGet(activeKey(user.uid)), act = null, i;
+  for (i = 0; i < usable.length; i++) if (usable[i].shopId === want) act = usable[i];
+  if (!act) for (i = 0; i < usable.length; i++) if (usable[i].shopId === hint) act = usable[i];
+  if (!act) act = usable[0];
+  FB.shops = usable; lsSet(activeKey(user.uid), act.shopId);
+  done(ctxOf(user, act));
+}
+function loadEntry(uid, shopId){
+  return withTimeout(db.doc("shops/" + shopId + "/members/" + uid).get(), 9000).then(function(ms){
+    if (!ms.exists) return null;
+    var m = ms.data();
+    return withTimeout(db.doc("shops/" + shopId).get(), 9000).then(function(ss){
+      var sd = ss.exists ? ss.data() : {};
+      return {shopId:shopId, shopName:sd.name || "", role:m.role, name:m.name, promptpay:sd.promptpay || ""};
+    });
+  });
+}
 function resolve(user){
   viewLoading("กำลังตรวจสอบบัญชี…");
-  var cached = lsGet("q2.ctx." + user.uid);
   withTimeout(db.doc("users/" + user.uid).get(), 9000).then(function(ps){
     if (!ps.exists) return viewOnboard(user);
-    var shopId = ps.data().shopId;
-    return withTimeout(db.doc("shops/" + shopId + "/members/" + user.uid).get(), 9000).then(function(ms){
-      if (!ms.exists){
-        lsDel("q2.ctx." + user.uid);
+    var d = ps.data(), ids = Array.isArray(d.shops) && d.shops.length ? d.shops.slice() : [];
+    if (d.shopId && ids.indexOf(d.shopId) < 0) ids.push(d.shopId);
+    return Promise.all(ids.map(function(id){ return loadEntry(user.uid, id); })).then(function(all){
+      var entries = all.filter(Boolean);
+      if (!entries.length){
+        lsDel("q2.ctx." + user.uid); lsDel("q2.shops." + user.uid);
         return viewOnboard(user, "บัญชีนี้ไม่ได้อยู่ในร้านแล้ว ใส่รหัสร้านใหม่เพื่อเข้าร่วมอีกครั้ง");
       }
-      var m = ms.data();
-      return withTimeout(db.doc("shops/" + shopId).get(), 9000).then(function(ss){
-        var sd = ss.exists ? ss.data() : {};
-        done({uid:user.uid, email:user.email || "", name:m.name, role:m.role, shopId:shopId, shopName:sd.name || "", promptpay:sd.promptpay || ""});
-      });
+      lsSet("q2.shops." + user.uid, entries);
+      var keep = entries.map(function(e){ return e.shopId; });
+      if (!Array.isArray(d.shops) || keep.length !== ids.length){     // migrate the old single pointer / drop shops this account left
+        var head = keep.indexOf(d.shopId) >= 0 ? d.shopId : keep[0], hr = entries.filter(function(e){ return e.shopId === head; })[0].role;
+        db.doc("users/" + user.uid).set({shopId:head, role:hr, shops:keep}).catch(function(){});
+      }
+      finish(user, entries, d.shopId);
     });
   }).catch(function(e){
-    if (isNet(e) && cached && cached.uid === user.uid){ FB.offlineCtx = true; done(cached); return; }
+    var cached = lsGet("q2.shops." + user.uid), oldCtx = lsGet("q2.ctx." + user.uid);
+    if (isNet(e) && ((cached && cached.length) || (oldCtx && oldCtx.uid === user.uid))){
+      FB.offlineCtx = true; finish(user, (cached && cached.length) ? cached : [oldCtx], oldCtx && oldCtx.shopId); return;
+    }
     if (isNet(e)) return viewError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ต้องมีอินเทอร์เน็ตในการเข้าสู่ระบบครั้งแรก", function(){ resolve(user); });
     viewError(errMsg(e), function(){ resolve(user); });
   });
@@ -773,7 +835,7 @@ FB.start = function(which, cb){
 };
 FB.signOut = function(){
   var uid = FB.ctx && FB.ctx.uid;
-  (auth ? auth.signOut() : Promise.resolve()).catch(function(){}).then(function(){ if (uid) lsDel("q2.ctx." + uid); location.reload(); });
+  (auth ? auth.signOut() : Promise.resolve()).catch(function(){}).then(function(){ if (uid){ lsDel("q2.ctx." + uid); lsDel("q2.shops." + uid); } location.reload(); });
 };
 FB.errMsg = errMsg;
 FB.isNet = isNet;
@@ -782,21 +844,38 @@ FB.path = function(p){ return "shops/" + FB.ctx.shopId + (p ? "/" + p : ""); };
 
 /* cashier writes — doc id = tx id, so retries are idempotent */
 FB.putTx = function(tx){
-  var c = FB.ctx, ref = db.doc(FB.path("tx/" + tx.id));
-  return withTimeout(ref.set({t:tx.t, day:tx.day, a:tx.a, m:tx.m, uid:c.uid, seller:c.name, status:"ok"}), 15000).catch(function(e){
+  var c = FB.ctx, ref = db.doc("shops/" + (tx.shop || c.shopId) + "/tx/" + tx.id);
+  return withTimeout(ref.set({t:tx.t, day:tx.day, a:tx.a, m:tx.m, uid:c.uid, seller:(tx.s || c.name).slice(0, 40), status:"ok"}), 15000).catch(function(e){
     // a retry of a write that already landed is an "update" and is denied by the rules -> treat as done
     if (e && e.code === "permission-denied") return withTimeout(ref.get(), 10000).then(function(s){ if (!s.exists) throw e; });
     throw e;
   });
 };
-FB.voidTx = function(id){
-  var ref = db.doc(FB.path("tx/" + id));
+FB.voidTx = function(id, shop){
+  var ref = db.doc("shops/" + (shop || FB.ctx.shopId) + "/tx/" + id);
   return withTimeout(ref.update({status:"void"}), 15000).catch(function(e){
     if (e && e.code === "not-found") return;
     if (e && e.code === "permission-denied") return withTimeout(ref.get(), 10000).then(function(s){ if (!(s.exists && s.data().status === "void")) throw e; });
     throw e;
   });
 };
+
+/* several shops per account */
+FB.switchShop = function(id){
+  var c = FB.ctx, e = (FB.shops || []).filter(function(s){ return s.shopId === id; })[0];
+  if (!c || !e || id === c.shopId) return;
+  lsSet(activeKey(c.uid), id);
+  withTimeout(db.doc("users/" + c.uid).update({shopId:id, role:e.role}).catch(function(){}), 3000).catch(function(){}).then(function(){ location.reload(); });
+};
+FB.addShop = function(code){
+  var c = FB.ctx;
+  return joinShop({uid:c.uid, email:c.email}, c.name, code).then(function(shopId){ lsSet(activeKey(c.uid), shopId); location.reload(); });
+};
+FB.createNewShop = function(shopName){
+  var c = FB.ctx;
+  return createShop({uid:c.uid, email:c.email}, c.name, shopName).then(function(shopId){ lsSet(activeKey(c.uid), shopId); location.reload(); });
+};
+FB.setMemberRole = function(uid, role){ return db.doc(FB.path("members/" + uid)).update({role:role}); };
 
 /* owner tools */
 FB.setPromptpay = function(digits){
@@ -1632,13 +1711,28 @@ function loadMembers(){
         });
       });
       row.appendChild(eb);
-      if (m.role !== "owner" && m.uid !== FB.ctx.uid){
+      if (m.uid !== FB.ctx.uid){
+        var act = h("div", "act");
+        var ask = function(text, okLabel, run){
+          if (row.nextSibling && row.nextSibling.className === "confirm-box"){ row.parentNode.removeChild(row.nextSibling); return; }
+          var cb = h("div", "confirm-box"), msg = h("div", "", text), r3 = h("div", "mini-row"), yes = h("button", "mini danger", okLabel), no = h("button", "mini", "ยกเลิก"), err = h("div", "hint bad");
+          yes.type = "button"; no.type = "button"; r3.appendChild(yes); r3.appendChild(no); cb.appendChild(msg); cb.appendChild(r3); cb.appendChild(err);
+          row.parentNode.insertBefore(cb, row.nextSibling);
+          no.addEventListener("click", function(){ if (cb.parentNode) cb.parentNode.removeChild(cb); });
+          yes.addEventListener("click", function(){ yes.disabled = true; run().then(function(){ memP = null; loadMembers(); expChanged = true; }, function(e){ yes.disabled = false; err.textContent = FB.errMsg(e); }); });
+        };
+        var rb = h("button", "mini", m.role === "owner" ? "ลดเป็นพนักงาน" : "เลื่อนเป็นเจ้าของ"); rb.type = "button";
+        rb.addEventListener("click", function(){
+          if (m.role === "owner") ask("ลด " + m.name + " ให้เป็นพนักงาน? เขาจะเข้าหน้ายอดขายและตั้งค่าของร้านนี้ไม่ได้อีก แต่ยังขายในแอปรับเงินได้", "ลดเป็นพนักงาน", function(){ return FB.setMemberRole(m.uid, "seller"); });
+          else ask("เลื่อน " + m.name + " เป็นเจ้าของร้าน? เขาจะเห็นยอดขาย ต้นทุน และกำไรทั้งหมด และจัดการร้านได้เท่ากับคุณ (รวมถึงลดสิทธิ์หรือเอาเจ้าของคนอื่นออกได้)", "เลื่อนเป็นเจ้าของ", function(){ return FB.setMemberRole(m.uid, "owner"); });
+        });
+        act.appendChild(rb);
         var b = h("button", "mini danger", "เอาออก"); b.type = "button";
         b.addEventListener("click", function(){
-          if (!b.dataset.arm){ b.dataset.arm = "1"; b.textContent = "ยืนยัน"; setTimeout(function(){ delete b.dataset.arm; b.textContent = "เอาออก"; }, 2500); return; }
-          b.disabled = true; FB.removeMember(m.uid).then(loadMembers, function(e){ b.disabled = false; b.textContent = FB.errMsg(e); });
+          ask("เอา " + m.name + (m.role === "owner" ? " (เจ้าของร้าน)" : "") + " ออกจากร้าน? เขาจะใช้ร้านนี้ไม่ได้อีก ยอดขายที่เคยบันทึกไว้ยังอยู่", "เอาออก", function(){ return FB.removeMember(m.uid); });
         });
-        row.appendChild(b);
+        act.appendChild(b);
+        row.appendChild(act);
       }
       box.appendChild(row);
     });
@@ -2015,7 +2109,25 @@ document.addEventListener("visibilitychange", function(){
   refresh();
 });
 applyTheme();
-FB.start("owner", function(){ refresh(); });
+function renderShopBar(){
+  var bar = $("shopBar"); bar.textContent = "";
+  if (!FB.shops || FB.shops.length < 2){ bar.hidden = true; return; }
+  FB.shops.forEach(function(sh){
+    var b = document.createElement("button"); b.type = "button"; b.textContent = sh.shopName || "ร้าน";
+    b.setAttribute("aria-pressed", String(sh.shopId === FB.ctx.shopId));
+    b.addEventListener("click", function(){ if (sh.shopId !== FB.ctx.shopId) FB.switchShop(sh.shopId); });
+    bar.appendChild(b);
+  });
+  bar.hidden = false;
+}
+$("newShopBtn").addEventListener("click", function(){ var b = $("newShopBox"); b.hidden = !b.hidden; if (!b.hidden) setTimeout(function(){ $("newShopName").focus(); }, 50); });
+$("newShopGo").addEventListener("click", function(){
+  var btn = this, hint = $("newShopHint"), nm = $("newShopName").value.trim();
+  if (!nm){ hint.className = "hint bad"; hint.textContent = "ใส่ชื่อร้าน"; return; }
+  btn.disabled = true; hint.className = "hint ok"; hint.textContent = "กำลังสร้างร้าน…";
+  FB.createNewShop(nm).catch(function(e){ btn.disabled = false; hint.className = "hint bad"; hint.textContent = e && e.say || FB.errMsg(e); });
+});
+FB.start("owner", function(){ renderShopBar(); refresh(); });
 })();
 </script>
 <!--BODY-END-->
