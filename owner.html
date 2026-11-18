@@ -1040,12 +1040,12 @@ function paint(res, prevRes, w, meta, extra){
     e.appendChild(document.createTextNode(mode === "m" ? "ลองกดลูกศรเพื่อดูเดือนอื่น" : mode === "y" ? "ลองกดลูกศรเพื่อดูปีอื่น" : "ลองกดลูกศรเพื่อดูช่วงก่อนหน้า"));
     col.appendChild(e); var pe = renderPurchases(w); if (pe) col.appendChild(pe); body.appendChild(col); return;
   }
-  if (w.gran === "h"){ col.appendChild(renderTxList(res.txs || [])); }
-  else { col.appendChild(renderChartCard(res.days, S)); col.appendChild(renderBest(S)); }
+  if (w.gran !== "h"){ col.appendChild(renderChartCard(res.days, S)); col.appendChild(renderBest(S)); }
   col.appendChild(renderSplit(S));
   if ((mode === "m" || mode === "y") && res.daily){ var wkc = renderWeekday(res.daily); if (wkc) col.appendChild(wkc); }
   if (res.sellers && res.sellers.length) col.appendChild(renderSellers(res.sellers));
   var pu = renderPurchases(w); if (pu) col.appendChild(pu);
+  if (w.gran === "h") col.appendChild(renderTxList(res.txs || []));
   body.appendChild(col);
   selectCol(S.best ? res.days.indexOf(res.days.filter(function(d){ return d.date === S.best.date; })[0]) : -1);
 }
